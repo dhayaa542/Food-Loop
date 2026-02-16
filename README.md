@@ -1,43 +1,58 @@
-# FoodLoop UI Redesign
+# FoodLoop — Walkthrough
 
-## Planning
-- [x] Review existing Flutter project structure
-- [x] Create implementation plan
-- [x] Get user approval on plan
+**GitHub Repository:** [Food-Loop](https://github.com/dhayaa542/Food-Loop)
 
-## Execution — Foundation
-- [x] Update `pubspec.yaml` with dependencies (Google Fonts)
-- [x] Create app theme & constants (`theme/app_theme.dart`)
-- [x] Create reusable widgets (`widgets/`)
+## What Was Built
 
-## Execution — Auth Screens
-- [x] Splash screen
-- [x] Login screen (with role-based navigation)
-- [x] Registration screen (with role selection: Buyer/Partner)
+Complete UI redesign of the existing Flutter "FreshCatch" app into **FoodLoop**, a sustainable food-sharing platform with 3 role-based interfaces and 15+ polished screens.
 
-## Execution — Buyer Interface
-- [x] Buyer home screen (greeting, location, recommended, nearby offers)
-- [x] Bottom navigation bar (Home, Nearby, Reservations, Profile)
-- [x] Offer details screen
-- [x] Nearby offers screen
-- [x] Reservation history screen
-- [x] Buyer profile screen
+## Project Structure
 
-## Execution — Partner Interface
-- [x] Partner dashboard (premium stats, online toggle)
-- [x] Manage Offers screen (list view + create/edit)
-- [x] Orders screen (tabs: Pending, Ready, History)
-- [x] Navigation moved to Side Drawer (Bottom Bar removed)
+```
+lib/
+├── main.dart                          # Entry point → SplashScreen
+├── theme/
+├── widgets/
+└── screens/
+    ├── splash_screen.dart             # Animated splash with gradient + logo
+    ├── login_screen.dart              # Login with role selector
+    ├── register_screen.dart           # Register with Buyer/Partner cards
+    ├── buyer/
+    ├── partner/
+        ├── partner_shell.dart         # Dashboard + Custom Drawer
+        ├── manage_offers_screen.dart  # Create/Edit offers
+        ├── orders_screen.dart         # Order management tabs
+        ├── profile_screen.dart        # Edit profile + parallax header
+        └── settings_screen.dart       # Dark mode toggle
+    └── admin/
+        ├── admin_shell.dart           # 5-tab bottom nav
+        ├── admin_dashboard.dart       # Metric cards + pie chart + activity feed
+        ├── user_management_screen.dart     # User list with suspend
+        ├── partner_approval_screen.dart    # Approve/reject partners
+        ├── offer_monitoring_screen.dart    # Offers with deactivate
+        └── analytics_screen.dart      # Pie chart + progress bars
+```
 
-## Execution — Admin Interface
-- [x] Admin dashboard (converted to pie chart)
-- [x] User management screen
-- [x] Partner approval screen
-- [x] Offer monitoring screen
-- [x] Analytics screen (converted to pie chart)
+## Design System
 
-## Cleanup & Verification
-- [x] Delete old FreshCatch files
-- [x] Fix withOpacity deprecation (63 → 11 info-only issues)
-- [x] flutter run -d chrome — compiles and launches successfully
-- [x] Push code to GitHub
+| Token | Value |
+|-------|-------|
+| Primary | `#2E7D32` (green) |
+| Background | `#F9FBF9` (off-white) |
+| Card radius | 16px |
+| Font | Poppins (via google_fonts) |
+| Shadows | Soft 12px blur |
+| Material | Material 3 enabled |
+
+## Verification
+
+| Check | Result |
+|-------|--------|
+| `flutter pub get` | ✅ Resolved dependencies |
+| `flutter analyze` | ✅ 11 remaining info-level warnings only |
+| `flutter run -d chrome` | ✅ Compiled and launched successfully |
+
+## Deleted Files
+- `lib/login.dart` (old FreshCatch)
+- `lib/sign_in.dart` (old FreshCatch)
+- `lib/home.dart` (old FreshCatch)
