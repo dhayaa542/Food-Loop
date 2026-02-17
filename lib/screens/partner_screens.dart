@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'auth_screens.dart';
 import '../main.dart';
+import 'auction_screens.dart';
 
 // ═══════════════════════════════════════════════
 //  PARTNER SHELL
@@ -21,6 +22,7 @@ class _PartnerShellState extends State<PartnerShell> {
     _PartnerDashboard(),
     _ManageOffersScreen(),
     _OrdersScreen(),
+    BulkOrderUploadScreen(),
   ];
 
   @override
@@ -75,6 +77,7 @@ class _PartnerShellState extends State<PartnerShell> {
           _drawerItem(0, 'Dashboard', Icons.dashboard_outlined, Icons.dashboard),
           _drawerItem(1, 'My Offers', Icons.local_offer_outlined, Icons.local_offer),
           _drawerItem(2, 'Orders', Icons.receipt_long_outlined, Icons.receipt_long),
+          _drawerItem(3, 'Bulk Orders', Icons.inventory_2_outlined, Icons.inventory_2),
           const Divider(height: 32, indent: 16, endIndent: 16),
           ListTile(
             leading: const Icon(Icons.person_outline, color: AppColors.textSecondary),

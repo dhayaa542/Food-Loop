@@ -2,9 +2,55 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'auth_screens.dart';
+import 'auction_screens.dart';
 
 // ═══════════════════════════════════════════════
-//  BUYER SHELL  (Drawer Navigation)
+//  DATA MODELS & STATE
+// ═══════════════════════════════════════════════
+class Offer {
+  final String title, restaurant, price, originalPrice, distance, pickupTime, about;
+  final BadgeStatus? status;
+  const Offer({
+    required this.title, required this.restaurant, required this.price, 
+    this.originalPrice = '', required this.distance, this.pickupTime = '', 
+    this.about = 'Delicious and sustainable meal.', this.status
+  });
+}
+
+class BuyerData {
+  static final ValueNotifier<List<Offer>> reservations = ValueNotifier([
+    const Offer(title: 'Sushi Box', restaurant: 'Sakura House', price: '₹130', distance: '0.8 km', pickupTime: 'Feb 14, 8–9 PM', status: BadgeStatus.completed),
+  ]);
+  
+  static final ValueNotifier<Map<String, String>> profile = ValueNotifier({
+    'name': 'Alex Johnson',
+    'email': 'alex.j@email.com',
+    'phone': '+91 98765 43210',
+    'address': '123, Eco Street, Green City',
+  });
+
+  static void addReservation(Offer offer) {
+    // Add as 'Active' reservation
+    final newRes = Offer(
+      title: offer.title, restaurant: offer.restaurant, price: offer.price, 
+      distance: offer.distance, pickupTime: offer.pickupTime, 
+      status: BadgeStatus.active
+    );
+    reservations.value = [newRes, ...reservations.value];
+  }
+
+  static void updateProfile(String name, String phone, String address) {
+    profile.value = {
+      ...profile.value,
+      'name': name,
+      'phone': phone,
+      'address': address,
+    };
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  BUYER SHELL
 // ═══════════════════════════════════════════════
 class BuyerShell extends StatefulWidget {
   const BuyerShell({super.key});
@@ -20,6 +66,7 @@ class _BuyerShellState extends State<BuyerShell> {
     _BuyerHomeScreen(),
     _NearbyScreen(),
     _ReservationsScreen(),
+    BulkOrderListScreen(),
     _BuyerProfileScreen(),
   ];
 
@@ -27,6 +74,7 @@ class _BuyerShellState extends State<BuyerShell> {
     _DrawerItem(Icons.home, 'Home'),
     _DrawerItem(Icons.explore, 'Nearby'),
     _DrawerItem(Icons.receipt_long, 'Reservations'),
+    _DrawerItem(Icons.gavel, 'Auctions'),
     _DrawerItem(Icons.person, 'Profile'),
   ];
 
@@ -59,7 +107,6 @@ Widget _buildDrawer(BuildContext context, List<_DrawerItem> items, int currentIn
     backgroundColor: AppColors.surface,
     child: Column(
       children: [
-        // Header
         Container(
           width: double.infinity,
           padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 24, bottom: 24, left: 20, right: 20),
@@ -69,23 +116,27 @@ Widget _buildDrawer(BuildContext context, List<_DrawerItem> items, int currentIn
               colors: [Color(0xFF1B5E20), Color(0xFF2E7D32), Color(0xFF43A047)],
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const CircleAvatar(
-                radius: 28,
-                backgroundColor: Colors.white24,
-                child: Icon(Icons.person, color: Colors.white, size: 28),
-              ),
-              const SizedBox(height: 14),
-              Text('FoodLoop', style: AppTextStyles.headlineSmall.copyWith(color: Colors.white)),
-              const SizedBox(height: 2),
-              Text(role, style: AppTextStyles.caption.copyWith(color: Colors.white70)),
-            ],
+          child: ValueListenableBuilder(
+            valueListenable: BuyerData.profile,
+            builder: (_, data, __) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.white24,
+                    child: Icon(Icons.person, color: Colors.white, size: 28),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(data['name']!, style: AppTextStyles.headlineSmall.copyWith(color: Colors.white)),
+                  const SizedBox(height: 2),
+                  Text(role, style: AppTextStyles.caption.copyWith(color: Colors.white70)),
+                ],
+              );
+            }
           ),
         ),
         const SizedBox(height: 8),
-        // Menu items
         ...List.generate(items.length, (i) {
           final selected = currentIndex == i;
           return Padding(
@@ -128,6 +179,12 @@ Widget _buildDrawer(BuildContext context, List<_DrawerItem> items, int currentIn
 class _BuyerHomeScreen extends StatelessWidget {
   const _BuyerHomeScreen();
 
+  static const _recommended = [
+    Offer(title: 'Veggie Bowl', restaurant: 'Green Leaf Cafe', price: '₹89', originalPrice: '₹200', distance: '1.2 km', pickupTime: '6–8 PM'),
+    Offer(title: 'Pasta Pack', restaurant: 'Italiano Express', price: '₹99', originalPrice: '₹180', distance: '2.1 km', pickupTime: '7–9 PM'),
+    Offer(title: 'Sushi Box', restaurant: 'Sakura House', price: '₹130', originalPrice: '₹250', distance: '0.8 km', pickupTime: '8–9 PM'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -135,16 +192,18 @@ class _BuyerHomeScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppDimens.paddingL),
         children: [
-          // Greeting
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Good evening,', style: AppTextStyles.bodyMedium),
-                    Text('Alex 🌱', style: AppTextStyles.headlineMedium),
-                  ],
+                child: ValueListenableBuilder(
+                  valueListenable: BuyerData.profile,
+                  builder: (_, data, __) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Good evening,', style: AppTextStyles.bodyMedium),
+                      Text('${data['name']!.split(' ')[0]} 🌱', style: AppTextStyles.headlineMedium),
+                    ],
+                  ),
                 ),
               ),
               CircleAvatar(
@@ -155,8 +214,6 @@ class _BuyerHomeScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-
-          // Search bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -171,35 +228,30 @@ class _BuyerHomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-
-          // Recommended
           Text('Recommended For You', style: AppTextStyles.headlineSmall),
           const SizedBox(height: 14),
           SizedBox(
             height: 260,
-            child: ListView(
+            child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              children: [
-                OfferCard(title: 'Veggie Bowl', restaurant: 'Green Leaf Cafe', price: '₹89', distance: '1.2 km', pickupTime: '6–8 PM',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
-                OfferCard(title: 'Pasta Pack', restaurant: 'Italiano Express', price: '₹99', distance: '2.1 km', pickupTime: '7–9 PM',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
-                OfferCard(title: 'Sushi Box', restaurant: 'Sakura House', price: '₹130', distance: '0.8 km', pickupTime: '8–9 PM',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
-              ],
+              itemCount: _recommended.length,
+              itemBuilder: (context, index) {
+                final offer = _recommended[index];
+                return OfferCard(
+                  title: offer.title, restaurant: offer.restaurant, price: offer.price, 
+                  distance: offer.distance, pickupTime: offer.pickupTime,
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _OfferDetailScreen(offer: offer))),
+                );
+              },
             ),
           ),
           const SizedBox(height: 28),
-
-          // Nearby Offers
           Text('Nearby Offers', style: AppTextStyles.headlineSmall),
           const SizedBox(height: 14),
           OfferListTile(title: 'Breakfast Bag', restaurant: 'Morning Bites', price: '₹49', distance: '0.5 km',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen(offer: Offer(title: 'Breakfast Bag', restaurant: 'Morning Bites', price: '₹49', distance: '0.5 km', pickupTime: '8-10 AM'))))),
           OfferListTile(title: 'Curry Combo', restaurant: 'Desi Kitchen', price: '₹75', distance: '1.8 km',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
-          OfferListTile(title: 'Sweet Treats', restaurant: 'Sugar Rush', price: '₹40', distance: '2.5 km',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen(offer: Offer(title: 'Curry Combo', restaurant: 'Desi Kitchen', price: '₹75', distance: '1.8 km', pickupTime: '12-2 PM'))))),
         ],
       ),
     );
@@ -210,7 +262,8 @@ class _BuyerHomeScreen extends StatelessWidget {
 //  OFFER DETAIL
 // ═══════════════════════════════════════════════
 class _OfferDetailScreen extends StatelessWidget {
-  const _OfferDetailScreen();
+  final Offer offer;
+  const _OfferDetailScreen({required this.offer});
 
   @override
   Widget build(BuildContext context) {
@@ -240,12 +293,10 @@ class _OfferDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Veggie Bowl', style: AppTextStyles.headlineMedium),
+                  Text(offer.title, style: AppTextStyles.headlineMedium),
                   const SizedBox(height: 4),
-                  Text('Green Leaf Cafe • 1.2 km away', style: AppTextStyles.bodyMedium),
+                  Text('${offer.restaurant} • ${offer.distance}', style: AppTextStyles.bodyMedium),
                   const SizedBox(height: 20),
-
-                  // Price
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -255,37 +306,35 @@ class _OfferDetailScreen extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        Text('₹89', style: AppTextStyles.headlineMedium.copyWith(color: AppColors.primary)),
+                        Text(offer.price, style: AppTextStyles.headlineMedium.copyWith(color: AppColors.primary)),
                         const SizedBox(width: 8),
-                        Text('₹200', style: AppTextStyles.bodyMedium.copyWith(decoration: TextDecoration.lineThrough, color: AppColors.textHint)),
+                        if (offer.originalPrice.isNotEmpty)
+                          Text(offer.originalPrice, style: AppTextStyles.bodyMedium.copyWith(decoration: TextDecoration.lineThrough, color: AppColors.textHint)),
                         const Spacer(),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppDimens.radiusFull)),
-                          child: Text('55% off', style: AppTextStyles.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.w600)),
+                          child: Text('Save Big', style: AppTextStyles.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Info rows
-                  _infoRow(Icons.access_time, 'Pickup Window', '6:00 PM – 8:00 PM'),
+                  _infoRow(Icons.access_time, 'Pickup Window', offer.pickupTime.isEmpty ? '6:00 PM – 8:00 PM' : offer.pickupTime),
                   _infoRow(Icons.inventory_2, 'Qty Available', '3 left'),
                   _infoRow(Icons.eco, 'You Save', '0.8 kg CO₂'),
                   const SizedBox(height: 20),
-
                   Text('About this offer', style: AppTextStyles.titleMedium),
                   const SizedBox(height: 8),
-                  Text('A delicious mix of seasonal vegetables, quinoa, and house dressing. Perfect for a healthy and sustainable meal.',
-                      style: AppTextStyles.bodyMedium),
+                  Text(offer.about, style: AppTextStyles.bodyMedium),
                   const SizedBox(height: 32),
-
                   PrimaryButton(
                     label: 'Reserve Now',
                     onPressed: () {
+                      BuyerData.addReservation(offer);
                       showModalBottomSheet(
                         context: context,
+                        isScrollControlled: true,
                         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
                         builder: (_) => Padding(
                           padding: const EdgeInsets.all(32),
@@ -300,7 +349,7 @@ class _OfferDetailScreen extends StatelessWidget {
                               const SizedBox(height: 16),
                               Text('Reserved!', style: AppTextStyles.headlineSmall),
                               const SizedBox(height: 8),
-                              Text('Pick up your Veggie Bowl between 6–8 PM at Green Leaf Cafe.',
+                              Text('Pick up your ${offer.title} at ${offer.restaurant}.',
                                   style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
                               const SizedBox(height: 24),
                               PrimaryButton(label: 'Done', onPressed: () { Navigator.pop(context); Navigator.pop(context); }),
@@ -339,8 +388,14 @@ class _OfferDetailScreen extends StatelessWidget {
 // ═══════════════════════════════════════════════
 //  NEARBY
 // ═══════════════════════════════════════════════
-class _NearbyScreen extends StatelessWidget {
+class _NearbyScreen extends StatefulWidget {
   const _NearbyScreen();
+  @override
+  State<_NearbyScreen> createState() => _NearbyScreenState();
+}
+
+class _NearbyScreenState extends State<_NearbyScreen> {
+  String _selectedFilter = 'All';
 
   @override
   Widget build(BuildContext context) {
@@ -368,13 +423,13 @@ class _NearbyScreen extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppDimens.paddingL),
               children: ['All', 'Vegan', 'Indian', 'Italian', 'Bakery', 'Japanese'].map((label) {
-                final selected = label == 'All';
+                final selected = label == _selectedFilter;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
                     label: Text(label),
                     selected: selected,
-                    onSelected: (_) {},
+                    onSelected: (_) => setState(() => _selectedFilter = label),
                     selectedColor: AppColors.primary.withValues(alpha: 0.15),
                     checkmarkColor: AppColors.primary,
                     labelStyle: AppTextStyles.bodySmall.copyWith(
@@ -397,15 +452,9 @@ class _NearbyScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppDimens.paddingL),
               children: [
                 OfferListTile(title: 'Veggie Bowl', restaurant: 'Green Leaf Cafe', price: '₹89', distance: '1.2 km',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen(offer: Offer(title:'Veggie Bowl', restaurant:'Green Leaf Cafe', price:'₹89', distance:'1.2 km'))))),
                 OfferListTile(title: 'Pasta Pack', restaurant: 'Italiano Express', price: '₹99', distance: '2.1 km',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
-                OfferListTile(title: 'Breakfast Bag', restaurant: 'Morning Bites', price: '₹49', distance: '0.5 km',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
-                OfferListTile(title: 'Curry Combo', restaurant: 'Desi Kitchen', price: '₹75', distance: '1.8 km',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
-                OfferListTile(title: 'Sweet Treats', restaurant: 'Sugar Rush', price: '₹40', distance: '2.5 km',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen()))),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen(offer: Offer(title:'Pasta Pack', restaurant:'Italiano Express', price:'₹99', distance:'2.1 km'))))),
               ],
             ),
           ),
@@ -424,32 +473,31 @@ class _ReservationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: Column(
           children: [
             const TabBar(
-              tabs: [Tab(text: 'Upcoming'), Tab(text: 'Completed'), Tab(text: 'Cancelled')],
+              tabs: [Tab(text: 'Active'), Tab(text: 'History')],
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textHint,
               indicatorColor: AppColors.primary,
             ),
             Expanded(
-              child: TabBarView(
-                children: [
-                  _reservationList([
-                    _ReservationData('Veggie Bowl', 'Green Leaf Cafe', '₹89', 'Today, 6–8 PM', BadgeStatus.active),
-                    _ReservationData('Pasta Pack', 'Italiano Express', '₹99', 'Tomorrow, 7–9 PM', BadgeStatus.pending),
-                  ]),
-                  _reservationList([
-                    _ReservationData('Sushi Box', 'Sakura House', '₹130', 'Feb 14, 8–9 PM', BadgeStatus.completed),
-                    _ReservationData('Breakfast Bag', 'Morning Bites', '₹49', 'Feb 13, 7–9 AM', BadgeStatus.completed),
-                  ]),
-                  _reservationList([
-                    _ReservationData('Curry Combo', 'Desi Kitchen', '₹75', 'Feb 12, 6–8 PM', BadgeStatus.cancelled),
-                  ]),
-                ],
+              child: ValueListenableBuilder<List<Offer>>(
+                valueListenable: BuyerData.reservations,
+                builder: (_, reservations, __) {
+                  final active = reservations.where((r) => r.status == BadgeStatus.active || r.status == null).toList();
+                  final history = reservations.where((r) => r.status == BadgeStatus.completed || r.status == BadgeStatus.cancelled).toList();
+
+                  return TabBarView(
+                    children: [
+                      _reservationList(active),
+                      _reservationList(history),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -458,7 +506,7 @@ class _ReservationsScreen extends StatelessWidget {
     );
   }
 
-  Widget _reservationList(List<_ReservationData> items) {
+  Widget _reservationList(List<Offer> items) {
     if (items.isEmpty) {
       return Center(
         child: Column(
@@ -484,16 +532,16 @@ class _ReservationsScreen extends StatelessWidget {
               decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppDimens.radiusMedium)),
               child: const Icon(Icons.restaurant, color: AppColors.primary),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(height: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(r.title, style: AppTextStyles.titleMedium.copyWith(fontSize: 14)),
                 Text(r.restaurant, style: AppTextStyles.caption),
                 const SizedBox(height: 4),
-                Text('${r.price} · ${r.time}', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                Text('${r.price} · ${r.pickupTime}', style: AppTextStyles.caption.copyWith(fontSize: 11)),
               ]),
             ),
-            StatusBadge(status: r.status),
+            StatusBadge(status: r.status ?? BadgeStatus.active),
           ],
         ),
       )).toList(),
@@ -501,57 +549,105 @@ class _ReservationsScreen extends StatelessWidget {
   }
 }
 
-class _ReservationData {
-  final String title, restaurant, price, time;
-  final BadgeStatus status;
-  const _ReservationData(this.title, this.restaurant, this.price, this.time, this.status);
-}
-
 // ═══════════════════════════════════════════════
 //  BUYER PROFILE
 // ═══════════════════════════════════════════════
-class _BuyerProfileScreen extends StatelessWidget {
+class _BuyerProfileScreen extends StatefulWidget {
   const _BuyerProfileScreen();
+  @override
+  State<_BuyerProfileScreen> createState() => _BuyerProfileScreenState();
+}
+
+class _BuyerProfileScreenState extends State<_BuyerProfileScreen> {
+  void _editProfile(Map<String, String> current) {
+    final nameCtrl = TextEditingController(text: current['name']);
+    final phoneCtrl = TextEditingController(text: current['phone']);
+    final addrCtrl = TextEditingController(text: current['address']);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Edit Profile', style: AppTextStyles.headlineSmall),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppInputField(label: 'Name', hint: 'Your Name', controller: nameCtrl),
+              const SizedBox(height: 12),
+              AppInputField(label: 'Phone', hint: 'Phone Number', controller: phoneCtrl),
+              const SizedBox(height: 12),
+              AppInputField(label: 'Address', hint: 'Delivery Address', controller: addrCtrl),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              BuyerData.updateProfile(nameCtrl.text, phoneCtrl.text, addrCtrl.text);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile Updated'), backgroundColor: AppColors.success));
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: ListView(
-        padding: const EdgeInsets.all(AppDimens.paddingL),
-        children: [
-          Center(
-            child: CircleAvatar(
-              radius: 44,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-              child: const Icon(Icons.person, color: AppColors.primary, size: 44),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Center(child: Text('Alex Johnson', style: AppTextStyles.headlineSmall)),
-          Center(child: Text('alex.j@email.com', style: AppTextStyles.caption)),
-          const SizedBox(height: 28),
-
-          // Stats
-          Container(
-            padding: const EdgeInsets.all(AppDimens.paddingM),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppDimens.radiusCard), boxShadow: AppShadows.soft),
-            child: Row(
-              children: [
-                _stat('12', 'Meals\nSaved', AppColors.primary),
-                _stat('₹1,840', 'Money\nSaved', AppColors.info),
-                _stat('4.2 kg', 'CO₂\nReduced', AppColors.success),
-              ],
-            ),
-          ),
-          const SizedBox(height: 28),
-
-          // Settings
-          _settingsTile(Icons.notifications_outlined, 'Notifications'),
-          _settingsTile(Icons.location_on_outlined, 'Address'),
-          _settingsTile(Icons.help_outline, 'Help & Support'),
-          _settingsTile(Icons.info_outline, 'About FoodLoop'),
-        ],
+      body: ValueListenableBuilder<Map<String, String>>(
+        valueListenable: BuyerData.profile,
+        builder: (_, data, __) {
+          return ListView(
+            padding: const EdgeInsets.all(AppDimens.paddingL),
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Center(
+                    child: CircleAvatar(
+                      radius: 44,
+                      backgroundColor: Colors.green, // Fallback color if primary not avail
+                      child: Icon(Icons.person, color: Colors.white, size: 44),
+                    ),
+                  ),
+                  Positioned(
+                    right: 120, bottom: 0,
+                    child: IconButton(
+                      icon: const CircleAvatar(radius: 14, backgroundColor: Colors.white, child: Icon(Icons.edit, size: 16, color: Colors.black)),
+                      onPressed: () => _editProfile(data),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Center(child: Text(data['name']!, style: AppTextStyles.headlineSmall)),
+              Center(child: Text(data['email']!, style: AppTextStyles.caption)),
+              const SizedBox(height: 28),
+              Container(
+                padding: const EdgeInsets.all(AppDimens.paddingM),
+                decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppDimens.radiusCard), boxShadow: AppShadows.soft),
+                child: Row(
+                  children: [
+                    _stat('12', 'Meals\nSaved', AppColors.primary),
+                    _stat('₹1,840', 'Money\nSaved', AppColors.info),
+                    _stat('4.2 kg', 'CO₂\nReduced', AppColors.success),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+              _settingsTile(Icons.phone_outlined, data['phone']!),
+              _settingsTile(Icons.location_on_outlined, data['address']!),
+              _settingsTile(Icons.notifications_outlined, 'Notifications'),
+              _settingsTile(Icons.help_outline, 'Help & Support'),
+            ],
+          );
+        }
       ),
     );
   }
