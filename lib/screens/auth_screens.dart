@@ -64,7 +64,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15), shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.eco, color: Colors.white, size: 52),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Image.asset('assets/logo.png', width: 60, height: 60),
+                ),
               ),
               const SizedBox(height: 24),
               Text('FoodLoop', style: AppTextStyles.headlineLarge.copyWith(color: Colors.white, fontSize: 36)),
@@ -140,7 +143,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Container(
                   width: 72, height: 72,
                   decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.eco, color: AppColors.primary, size: 36),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Image.asset('assets/logo.png', width: 48, height: 48),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -276,7 +282,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Container(
                   width: 72, height: 72,
                   decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.eco, color: AppColors.primary, size: 36),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Image.asset('assets/logo.png', width: 48, height: 48),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

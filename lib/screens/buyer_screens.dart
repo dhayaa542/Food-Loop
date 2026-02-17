@@ -3,51 +3,12 @@ import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'auth_screens.dart';
 import 'auction_screens.dart';
+import '../data/app_data.dart';
 
 // ═══════════════════════════════════════════════
 //  DATA MODELS & STATE
 // ═══════════════════════════════════════════════
-class Offer {
-  final String title, restaurant, price, originalPrice, distance, pickupTime, about;
-  final BadgeStatus? status;
-  const Offer({
-    required this.title, required this.restaurant, required this.price, 
-    this.originalPrice = '', required this.distance, this.pickupTime = '', 
-    this.about = 'Delicious and sustainable meal.', this.status
-  });
-}
 
-class BuyerData {
-  static final ValueNotifier<List<Offer>> reservations = ValueNotifier([
-    const Offer(title: 'Sushi Box', restaurant: 'Sakura House', price: '₹130', distance: '0.8 km', pickupTime: 'Feb 14, 8–9 PM', status: BadgeStatus.completed),
-  ]);
-  
-  static final ValueNotifier<Map<String, String>> profile = ValueNotifier({
-    'name': 'Alex Johnson',
-    'email': 'alex.j@email.com',
-    'phone': '+91 98765 43210',
-    'address': '123, Eco Street, Green City',
-  });
-
-  static void addReservation(Offer offer) {
-    // Add as 'Active' reservation
-    final newRes = Offer(
-      title: offer.title, restaurant: offer.restaurant, price: offer.price, 
-      distance: offer.distance, pickupTime: offer.pickupTime, 
-      status: BadgeStatus.active
-    );
-    reservations.value = [newRes, ...reservations.value];
-  }
-
-  static void updateProfile(String name, String phone, String address) {
-    profile.value = {
-      ...profile.value,
-      'name': name,
-      'phone': phone,
-      'address': address,
-    };
-  }
-}
 
 // ═══════════════════════════════════════════════
 //  BUYER SHELL
@@ -189,69 +150,110 @@ class _BuyerHomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: ListView(
-        padding: const EdgeInsets.all(AppDimens.paddingL),
+      body: Stack(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: ValueListenableBuilder(
-                  valueListenable: BuyerData.profile,
-                  builder: (_, data, __) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Good evening,', style: AppTextStyles.bodyMedium),
-                      Text('${data['name']!.split(' ')[0]} 🌱', style: AppTextStyles.headlineMedium),
-                    ],
+          // Gradient Background Header
+          Container(
+            height: 220,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                colors: [Color(0xFF1B5E20), AppColors.background],
+                stops: [0.0, 0.9],
+              ),
+            ),
+          ),
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.all(AppDimens.paddingL),
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: ValueListenableBuilder(
+                        valueListenable: BuyerData.profile,
+                        builder: (_, data, __) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Good evening,', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white70)),
+                            Text('${data['name']!.split(' ')[0]} 🌱', style: AppTextStyles.headlineMedium.copyWith(color: Colors.white)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                      padding: const EdgeInsets.all(4),
+                      child: const CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Colors.white,
+                        child: Icon(Icons.person, color: AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(30),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search dishes, restaurants...',
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+                      icon: const Icon(Icons.search, color: AppColors.primary),
+                      border: InputBorder.none,
+                      suffixIcon: Container(
+                        margin: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+                        child: Icon(Icons.tune, size: 18, color: AppColors.primary),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                child: const Icon(Icons.person, color: AppColors.primary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surface, borderRadius: BorderRadius.circular(AppDimens.radiusMedium), boxShadow: AppShadows.soft,
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.search, color: AppColors.textHint, size: 22),
-                const SizedBox(width: 10),
-                Text('Search dishes, restaurants...', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 28),
-          Text('Recommended For You', style: AppTextStyles.headlineSmall),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 260,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _recommended.length,
-              itemBuilder: (context, index) {
-                final offer = _recommended[index];
-                return OfferCard(
-                  title: offer.title, restaurant: offer.restaurant, price: offer.price, 
-                  distance: offer.distance, pickupTime: offer.pickupTime,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _OfferDetailScreen(offer: offer))),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 28),
-          Text('Nearby Offers', style: AppTextStyles.headlineSmall),
-          const SizedBox(height: 14),
+                const SizedBox(height: 32),
+                Row(
+                  children: [
+                    Text('Recommended For You', style: AppTextStyles.headlineSmall),
+                    const Spacer(),
+                    Text('View All', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 270,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _recommended.length,
+                    itemBuilder: (context, index) {
+                      final offer = _recommended[index];
+                      return OfferCard(
+                        title: offer.title, restaurant: offer.restaurant, price: offer.price, 
+                        distance: offer.distance, pickupTime: offer.pickupTime,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _OfferDetailScreen(offer: offer))),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    Text('Nearby Offers', style: AppTextStyles.headlineSmall),
+                    const Spacer(),
+                    Text('View All', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
           OfferListTile(title: 'Breakfast Bag', restaurant: 'Morning Bites', price: '₹49', distance: '0.5 km',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen(offer: Offer(title: 'Breakfast Bag', restaurant: 'Morning Bites', price: '₹49', distance: '0.5 km', pickupTime: '8-10 AM'))))),
           OfferListTile(title: 'Curry Combo', restaurant: 'Desi Kitchen', price: '₹75', distance: '1.8 km',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const _OfferDetailScreen(offer: Offer(title: 'Curry Combo', restaurant: 'Desi Kitchen', price: '₹75', distance: '1.8 km', pickupTime: '12-2 PM'))))),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -268,22 +270,45 @@ class _OfferDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 220, pinned: true,
-            leading: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3), shape: BoxShape.circle),
-                child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+            expandedHeight: 280,
+            pinned: true,
+            backgroundColor: AppColors.background,
+            elevation: 0,
+            leading: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: CircleAvatar(
+                backgroundColor: Colors.white,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.black, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ),
-              onPressed: () => Navigator.pop(context),
             ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  child: IconButton(
+                    icon: const Icon(Icons.favorite_border, color: Colors.black, size: 20),
+                    onPressed: () {},
+                  ),
+                ),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                child: const Center(child: Icon(Icons.restaurant, size: 72, color: AppColors.primary)),
+              background: Hero(
+                tag: offer.title,
+                child: offer.imageUrl != null && offer.imageUrl!.isNotEmpty
+                  ? Image.network(offer.imageUrl!, fit: BoxFit.cover)
+                  : Container(
+                      color: AppColors.primary.withOpacity(0.1),
+                      child: const Center(child: Icon(Icons.restaurant, size: 64, color: AppColors.primary)),
+                    ),
               ),
             ),
           ),
@@ -293,93 +318,135 @@ class _OfferDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(offer.title, style: AppTextStyles.headlineMedium),
-                  const SizedBox(height: 4),
-                  Text('${offer.restaurant} • ${offer.distance}', style: AppTextStyles.bodyMedium),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(AppDimens.radiusMedium),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(offer.price, style: AppTextStyles.headlineMedium.copyWith(color: AppColors.primary)),
-                        const SizedBox(width: 8),
-                        if (offer.originalPrice.isNotEmpty)
-                          Text(offer.originalPrice, style: AppTextStyles.bodyMedium.copyWith(decoration: TextDecoration.lineThrough, color: AppColors.textHint)),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppDimens.radiusFull)),
-                          child: Text('Save Big', style: AppTextStyles.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.w600)),
-                        ),
-                      ],
-                    ),
+                  Row(
+                    children: [
+                      Expanded(child: Text(offer.title, style: AppTextStyles.headlineLarge)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: AppColors.success.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                        child: Text('4.8 ★', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 20),
-                  _infoRow(Icons.access_time, 'Pickup Window', offer.pickupTime.isEmpty ? '6:00 PM – 8:00 PM' : offer.pickupTime),
-                  _infoRow(Icons.inventory_2, 'Qty Available', '3 left'),
-                  _infoRow(Icons.eco, 'You Save', '0.8 kg CO₂'),
-                  const SizedBox(height: 20),
-                  Text('About this offer', style: AppTextStyles.titleMedium),
                   const SizedBox(height: 8),
-                  Text(offer.about, style: AppTextStyles.bodyMedium),
-                  const SizedBox(height: 32),
-                  PrimaryButton(
-                    label: 'Reserve Now',
-                    onPressed: () {
-                      BuyerData.addReservation(offer);
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                        builder: (_) => Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), shape: BoxShape.circle),
-                                child: const Icon(Icons.check_circle, color: AppColors.success, size: 48),
-                              ),
-                              const SizedBox(height: 16),
-                              Text('Reserved!', style: AppTextStyles.headlineSmall),
-                              const SizedBox(height: 8),
-                              Text('Pick up your ${offer.title} at ${offer.restaurant}.',
-                                  style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
-                              const SizedBox(height: 24),
-                              PrimaryButton(label: 'Done', onPressed: () { Navigator.pop(context); Navigator.pop(context); }),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                  Text('${offer.restaurant} • ${offer.distance}', style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary)),
                   const SizedBox(height: 24),
+                  
+                  // Info Cards
+                  Row(
+                    children: [
+                      _infoCard(Icons.access_time, 'Pickup', offer.pickupTime.isEmpty ? '6-8 PM' : offer.pickupTime.split(',').last.trim()),
+                      const SizedBox(width: 12),
+                      _infoCard(Icons.inventory_2, 'Left', '3 Packs'),
+                      const SizedBox(width: 12),
+                      _infoCard(Icons.eco, 'Save', '0.8 kg'),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+
+                  Text('About this offer', style: AppTextStyles.headlineSmall),
+                  const SizedBox(height: 12),
+                  Text(
+                    offer.about,
+                    style: AppTextStyles.bodyMedium.copyWith(height: 1.5, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 100), // Spacing for bottom bar
                 ],
               ),
             ),
           ),
         ],
       ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0,-5))],
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Total Price', style: AppTextStyles.caption),
+                  const SizedBox(height: 4),
+                  Text(offer.price, style: AppTextStyles.headlineMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: SizedBox(
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: () {
+                       BuyerData.addReservation(offer);
+                       showModalBottomSheet(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircleAvatar(
+                                radius: 32, backgroundColor: AppColors.success,
+                                child: Icon(Icons.check, color: Colors.white, size: 32),
+                              ),
+                              const SizedBox(height: 16),
+                              Text('Reserved!', style: AppTextStyles.headlineMedium),
+                              const SizedBox(height: 8),
+                              Text('Head to ${offer.restaurant} during the pickup window.', textAlign: TextAlign.center, style: AppTextStyles.bodyMedium),
+                              const SizedBox(height: 24),
+                              PrimaryButton(label: 'View Reservations', onPressed: () {
+                                Navigator.pop(context); // Close sheet
+                                Navigator.pop(context); // Close detail
+                                // Ideally navigate to reservations tab
+                              }),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Reserve Now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: AppColors.primary),
-          const SizedBox(width: 10),
-          Text(label, style: AppTextStyles.bodyMedium),
-          const Spacer(),
-          Text(value, style: AppTextStyles.titleMedium.copyWith(fontSize: 14)),
-        ],
+  Widget _infoCard(IconData icon, String label, String value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: AppColors.primary, size: 24),
+            const SizedBox(height: 8),
+            Text(value, style: AppTextStyles.titleMedium.copyWith(fontSize: 13), textAlign: TextAlign.center, maxLines: 1),
+            const SizedBox(height: 4),
+            Text(label, style: AppTextStyles.caption.copyWith(fontSize: 11)),
+          ],
+        ),
       ),
     );
   }
@@ -429,18 +496,18 @@ class _NearbyScreenState extends State<_NearbyScreen> {
                   child: FilterChip(
                     label: Text(label),
                     selected: selected,
+                    showCheckmark: false,
                     onSelected: (_) => setState(() => _selectedFilter = label),
-                    selectedColor: AppColors.primary.withValues(alpha: 0.15),
-                    checkmarkColor: AppColors.primary,
+                    backgroundColor: selected ? AppColors.primary : Colors.white,
                     labelStyle: AppTextStyles.bodySmall.copyWith(
-                      color: selected ? AppColors.primary : AppColors.textSecondary,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      color: selected ? Colors.white : AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
                     ),
-                    backgroundColor: AppColors.surface,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppDimens.radiusFull),
+                      borderRadius: BorderRadius.circular(20),
                       side: BorderSide(color: selected ? AppColors.primary : AppColors.divider),
                     ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                   ),
                 );
               }).toList(),
@@ -612,14 +679,14 @@ class _BuyerProfileScreenState extends State<_BuyerProfileScreen> {
                   const Center(
                     child: CircleAvatar(
                       radius: 44,
-                      backgroundColor: Colors.green, // Fallback color if primary not avail
+                      backgroundColor: AppColors.primary, 
                       child: Icon(Icons.person, color: Colors.white, size: 44),
                     ),
                   ),
                   Positioned(
                     right: 120, bottom: 0,
                     child: IconButton(
-                      icon: const CircleAvatar(radius: 14, backgroundColor: Colors.white, child: Icon(Icons.edit, size: 16, color: Colors.black)),
+                      icon: const CircleAvatar(radius: 14, backgroundColor: Colors.white, child: Icon(Icons.edit, size: 16, color: AppColors.primary)),
                       onPressed: () => _editProfile(data),
                     ),
                   ),

@@ -24,8 +24,8 @@ class OfferCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 200,
-        margin: const EdgeInsets.only(right: 14),
+        width: 240,
+        margin: const EdgeInsets.only(right: 16, bottom: 4),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(AppDimens.radiusCard),
@@ -42,23 +42,29 @@ class OfferCard extends StatelessWidget {
                     height: 120,
                     width: double.infinity,
                     color: AppColors.primary.withValues(alpha: 0.08),
-                    child: imageUrl.isNotEmpty
-                        ? Image.network(imageUrl, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.restaurant, color: AppColors.primary, size: 36)))
-                        : const Center(child: Icon(Icons.restaurant, color: AppColors.primary, size: 36)),
-                  ),
-                  if (distance.isNotEmpty)
-                    Positioned(
-                      top: 8, right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(AppDimens.radiusFull),
-                        ),
-                        child: Text(distance, style: AppTextStyles.caption.copyWith(color: Colors.white, fontSize: 10)),
-                      ),
+                    child: Hero(
+                      tag: title,
+                      child: imageUrl.isNotEmpty
+                          ? Image.network(imageUrl, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.restaurant, color: AppColors.primary, size: 36)))
+                          : const Center(child: Icon(Icons.restaurant, color: AppColors.primary, size: 36)),
                     ),
+                  ),
+                  Positioned(
+                    top: 8, right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(12)),
+                      child: Text(distance, style: AppTextStyles.caption.copyWith(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  Positioned(
+                    top: 8, left: 8,
+                     child: CircleAvatar(
+                      radius: 14, backgroundColor: Colors.white.withOpacity(0.9),
+                      child: const Icon(Icons.favorite_border, size: 16, color: AppColors.textSecondary),
+                    ),
+                  ),
                 ],
               ),
             ),

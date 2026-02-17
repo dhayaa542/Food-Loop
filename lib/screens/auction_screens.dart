@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
+import '../data/app_data.dart';
 
 // ═══════════════════════════════════════════════
 //  MODELS & AI LOGIC
@@ -13,6 +14,7 @@ class BulkOrder {
   final String title;
   final String description;
   final String restaurant;
+  final String imageUrl; // New field
   final double minBid;
   final int minUsers; // 5
   final int durationSeconds; // 90
@@ -31,6 +33,7 @@ class BulkOrder {
     required this.title,
     required this.description,
     required this.restaurant,
+    required this.imageUrl,
     required this.minBid,
     this.minUsers = 5,
     this.durationSeconds = 90,
@@ -89,17 +92,18 @@ class AuctionManager {
   // Mock Data Initialization
   static void init() {
     if (_activeOrders.isEmpty) {
-      createOrder('Corporate Lunch Pack', '50 servings of premium Biryani with sides.', 'Royal Spice', 2000);
-      createOrder('Vegan Party Platter', 'Assorted vegan appetizers for 20 people.', 'Green Eats', 1500);
+      createOrder('Corporate Lunch Pack', '50 servings of premium Biryani with sides.', 'Royal Spice', 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8', 2000);
+      createOrder('Vegan Party Platter', 'Assorted vegan appetizers for 20 people.', 'Green Eats', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd', 1500);
     }
   }
 
-  static void createOrder(String title, String desc, String restaurant, double minBid) {
+  static void createOrder(String title, String desc, String restaurant, String imageUrl, double minBid) {
     final order = BulkOrder(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: title,
       description: desc,
       restaurant: restaurant,
+      imageUrl: imageUrl,
       minBid: minBid,
     );
     _activeOrders.add(order);
@@ -127,20 +131,17 @@ class AuctionManager {
     
     // Start Timer
     Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (order.timeRemaining.value <= 0) {
+      if (order.timeRemaining.value <= 0 || (order.countdown.value == 0)) { // Stop if sold
         timer.cancel();
-        order.countdown.value = 0; // Sold
+        order.countdown.value = 0; // Ensure sold state
         return;
       }
 
       order.timeRemaining.value--;
       
-      // Check Inactivity Logic (No bid for 10s)
-      final lastBid = order.lastBidTime.value ?? DateTime.now(); // If no bids, use current time?
+      final lastBid = order.lastBidTime.value ?? DateTime.now();
       final inactivitySecs = DateTime.now().difference(lastBid).inSeconds;
       
-      // Countdown Logic:
-      // If timeRemaining <= 3 OR inactivity > 10
       bool startCountdown = order.timeRemaining.value <= 3 || inactivitySecs > 10;
       
       if (startCountdown) {
@@ -154,7 +155,6 @@ class AuctionManager {
            // End logic handled by UI observing countdown == 0
         }
       } else {
-        // Reset countdown if condition false (e.g. new bid reset inactivity)
         if (order.countdown.value != null && order.timeRemaining.value > 3) {
             order.countdown.value = null;
         }
@@ -163,7 +163,7 @@ class AuctionManager {
 
     // Start Bot Bidding
     Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (order.timeRemaining.value <= 0) {
+      if (order.timeRemaining.value <= 0 || (order.countdown.value == 0)) { // Stop if sold
         timer.cancel();
         return;
       }
@@ -171,7 +171,7 @@ class AuctionManager {
       // Random chance for a bot to bid
       if (Random().nextBool()) {
         double currentHigh = order.bids.value.isNotEmpty ? order.bids.value.first.amount : order.minBid;
-        double increment = (Random().nextInt(5) + 1) * 10.0; // Random increment 10-50
+        double increment = (Random().nextInt(5) + 1) * 10.0;
         double newBid = currentHigh + increment;
         
         List<String> botNames = ['Alice', 'Bob', 'Charlie', 'Dave', 'Eve'];
@@ -187,14 +187,12 @@ class AuctionManager {
     // Insert at top (highest bid)
     order.bids.value = [newBid, ...order.bids.value]; 
     order.lastBidTime.value = DateTime.now();
-    
-    // Soft Close: Clear countdown and extend timer if needed
-    order.countdown.value = null;
-    
-    // If timer is about to run out (or countdown active), ensure at least 10s
-    if (order.timeRemaining.value < 10) {
-      order.timeRemaining.value = 10;
+
+    // Reset countdown (inactivity timer) ONLY if main timer is not running out (<3s)
+    if (order.timeRemaining.value > 3) {
+      order.countdown.value = null;
     }
+    // If <3s, we do NOT reset countdown, and we do NOT extend time. Auction ends hard.
   }
 }
 
@@ -235,7 +233,8 @@ class _BulkOrderUploadScreenState extends State<BulkOrderUploadScreen> {
                   AuctionManager.createOrder(
                     _titleCtrl.text,
                     _descCtrl.text,
-                    'My Restaurant', // Should be dynamic
+                    'My Restaurant', 
+                    'https://images.unsplash.com/photo-1546069901-ba9599a7e63c', // Default image until upload logic added
                     double.tryParse(_priceCtrl.text) ?? 500,
                   );
                   Navigator.pop(context);
@@ -305,14 +304,14 @@ class _AuctionCard extends StatelessWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                  child: const Text('⚡ Auction', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)),
+                  decoration: BoxDecoration(color: AppColors.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: const Text('⚡ Auction', style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
                 const Spacer(),
-                const Icon(Icons.people, size: 16, color: Colors.grey),
+                const Icon(Icons.people, size: 16, color: AppColors.textSecondary),
                 ValueListenableBuilder<int>(
                   valueListenable: order.userCount,
-                  builder: (_, count, __) => Text(' $count/${order.minUsers} joined', style: AppTextStyles.caption),
+                  builder: (_, count, __) => Text(' $count/${order.minUsers} joined', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
                 ),
               ],
             ),
@@ -357,12 +356,13 @@ class AuctionLobbyScreen extends StatelessWidget {
           return LiveAuctionScreen(order: order);
         }
         return Scaffold(
-          appBar: AppBar(title: const Text('Waiting Room')),
+          backgroundColor: AppColors.background,
+          appBar: AppBar(title: const Text('Waiting Room'), backgroundColor: AppColors.primary, foregroundColor: Colors.white, centerTitle: true),
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const CircularProgressIndicator(),
+                const CircularProgressIndicator(color: AppColors.primary),
                 const SizedBox(height: 24),
                 ValueListenableBuilder<int>(
                   valueListenable: order.userCount,
@@ -371,9 +371,9 @@ class AuctionLobbyScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: AppColors.primary),
                   ),
                 ),
-                const Text('Waiting for users...'),
+                Text('Waiting for users...', style: AppTextStyles.bodyMedium),
                 const SizedBox(height: 8),
-                const Text('First Come First Serve!', style: TextStyle(color:  Colors.red)),
+                Text('First Come First Serve!', style: AppTextStyles.labelLarge.copyWith(color: AppColors.orange, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -423,12 +423,63 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
     );
   }
 
+  bool _reservationAdded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.order.countdown.addListener(_onCountdownChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.order.countdown.removeListener(_onCountdownChanged);
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onCountdownChanged() {
+    if (widget.order.countdown.value == 0 && !_reservationAdded) {
+       final bids = widget.order.bids.value;
+       if (bids.isNotEmpty && bids.first.userId == 'user') {
+         _reservationAdded = true;
+         // Add to reservations
+         final wonOffer = Offer(
+           title: widget.order.title,
+           restaurant: widget.order.restaurant,
+           price: '₹${bids.first.amount.toInt()}',
+           distance: '2.5 km', // Simulation
+           pickupTime: 'Today, 8-9 PM',
+           status: BadgeStatus.active,
+           about: widget.order.description,
+           imageUrl: widget.order.imageUrl,
+         );
+         BuyerData.addReservation(wonOffer);
+         
+         // Notify user they won (optional, but good UX)
+         WidgetsBinding.instance.addPostFrameCallback((_) {
+           if (mounted) {
+             ScaffoldMessenger.of(context).showSnackBar(
+               const SnackBar(
+                 content: Text('Congratulations! Order added to Reservations.'),
+                 backgroundColor: AppColors.primary,
+                 duration: Duration(seconds: 4),
+               ),
+             );
+           }
+         });
+       }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🔴 LIVE BIDDING'),
-        backgroundColor: Colors.red,
+        title: Text('LIVE AUCTION', style: AppTextStyles.headlineSmall.copyWith(color: Colors.white, letterSpacing: 1.2)),
+        backgroundColor: AppColors.primary,
+        centerTitle: true,
+        elevation: 0,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
         actions: [
@@ -448,27 +499,84 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
             children: [
               // Timer Header
               Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.red.shade50,
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  border: Border(bottom: BorderSide(color: AppColors.divider)),
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.timer, color: Colors.red),
+                    const Icon(Icons.timer_outlined, color: AppColors.primary),
                     const SizedBox(width: 8),
                     ValueListenableBuilder<int>(
                       valueListenable: widget.order.timeRemaining,
                       builder: (_, seconds, __) {
                         final mins = seconds ~/ 60;
                         final secs = seconds % 60;
+                        
+                        Color timerColor = AppColors.primary;
+                        if (seconds <= 10) timerColor = AppColors.error;
+                        else if (seconds <= 30) timerColor = AppColors.warning;
+
                         return Text(
                           '$mins:${secs.toString().padLeft(2, '0')}',
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red),
+                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: timerColor),
                         );
                       },
                     ),
                   ],
                 ),
               ),
+
+              // Product Info Card (New)
+              ValueListenableBuilder<int?>(
+                valueListenable: widget.order.countdown,
+                builder: (_, count, __) {
+                  if (count == 0) return const SizedBox.shrink(); // Hide if Sold
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    color: Colors.white,
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            widget.order.imageUrl,
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(width: 80, height: 80, color: Colors.grey.shade300, child: const Icon(Icons.fastfood)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(widget.order.title, style: AppTextStyles.titleMedium),
+                              const SizedBox(height: 4),
+                              Text(widget.order.description, style: AppTextStyles.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(Icons.store, size: 14, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text(widget.order.restaurant, style: AppTextStyles.bodySmall),
+                                  const Spacer(),
+                                  Text('Base Price: ₹${widget.order.minBid.toInt()}', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const Divider(height: 1),
 
               // Bid List
               Expanded(
@@ -482,18 +590,30 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
                       itemBuilder: (_, i) {
                         final bid = bids[i];
                         final isTop = i == 0;
-                        return ListTile(
-                          leading: CircleAvatar(child: Text(bid.userName[0])),
-                          title: Text(bid.userName),
-                          trailing: Text(
-                            '₹${bid.amount}',
-                            style: TextStyle(
-                              fontSize: isTop ? 20 : 16,
-                              fontWeight: isTop ? FontWeight.bold : FontWeight.normal,
-                              color: isTop ? Colors.green : Colors.black,
+                        return Card(
+                          elevation: isTop ? 2 : 0,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: isTop ? const BorderSide(color: AppColors.primary, width: 1.5) : BorderSide.none,
+                          ),
+                          color: isTop ? AppColors.primary.withOpacity(0.05) : Colors.white,
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: isTop ? AppColors.primary : Colors.grey.shade200,
+                              foregroundColor: isTop ? Colors.white : Colors.grey.shade700,
+                              child: Text(bid.userName[0]),
+                            ),
+                            title: Text(bid.userName, style: isTop ? AppTextStyles.titleMedium.copyWith(color: AppColors.primary) : AppTextStyles.bodyLarge),
+                            trailing: Text(
+                              '₹${bid.amount.toInt()}',
+                              style: TextStyle(
+                                fontSize: isTop ? 20 : 16,
+                                fontWeight: isTop ? FontWeight.bold : FontWeight.w500,
+                                color: isTop ? AppColors.primary : AppColors.textPrimary,
+                              ),
                             ),
                           ),
-                          tileColor: isTop ? Colors.green.withOpacity(0.1) : null,
                         );
                       },
                     );
@@ -501,136 +621,170 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
                 ),
               ),
 
-              // Bidding Area
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5))],
-                ),
-                child: SafeArea(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Custom Bid Input (Native TextField)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Row(
+              // Bidding Area (Input OR Winner)
+              ValueListenableBuilder<int?>(
+                valueListenable: widget.order.countdown,
+                builder: (_, count, __) {
+                  final isSold = count == 0;
+                  
+                  if (isSold) {
+                    return Container(
+                      padding: const EdgeInsets.all(32),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5))],
+                      ),
+                      child: SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.edit, color: Colors.grey, size: 20),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextField(
-                                controller: _amountCtrl,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  hintText: 'Enter custom amount...',
-                                  border: InputBorder.none,
-                                ),
-                              ),
+                            Text(
+                              '🎉 SOLD! 🎉',
+                              style: AppTextStyles.headlineLarge.copyWith(color: AppColors.success, fontWeight: FontWeight.bold),
                             ),
-                            IconButton(
-                              onPressed: _submitBid,
-                              icon: const Icon(Icons.send, color: AppColors.primary),
+                            const SizedBox(height: 16),
+                            ValueListenableBuilder<List<Bid>>(
+                              valueListenable: widget.order.bids,
+                              builder: (_, bids, __) {
+                                final winner = bids.isNotEmpty ? bids.first.userName : 'No Bids';
+                                final amount = bids.isNotEmpty ? bids.first.amount : widget.order.minBid;
+                                return Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text('Winner', style: AppTextStyles.bodyMedium),
+                                      Text(winner, style: AppTextStyles.headlineMedium.copyWith(fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 8),
+                                      Text('Final Price', style: AppTextStyles.bodyMedium),
+                                      Text('₹$amount', style: AppTextStyles.headlineLarge.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 32),
+                            ElevatedButton.icon(
+                              onPressed: () => Navigator.of(context).pop(),
+                              icon: const Icon(Icons.check),
+                              label: const Text('Close Auction'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.success,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      
-                      // AI Suggestions
-                      Row(
+                    );
+                  }
+
+                  // Active Bidding Area
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5))],
+                    ),
+                    child: SafeArea(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.auto_awesome, color: Colors.purple, size: 20),
-                          const SizedBox(width: 8),
-                          Text('AI Suggested Bids', style: AppTextStyles.titleMedium),
+                          // Custom Bid Input (Native TextField)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.edit, color: Colors.grey, size: 20),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _amountCtrl,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      hintText: 'Enter custom amount...',
+                                      border: InputBorder.none,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: _submitBid,
+                                  icon: const Icon(Icons.send, color: AppColors.primary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // AI Suggestions
+                          Row(
+                            children: [
+                              Icon(Icons.auto_awesome, color: AppColors.primary.withOpacity(0.7), size: 18),
+                              const SizedBox(width: 8),
+                              Text('Quick Bid', style: AppTextStyles.titleMedium.copyWith(color: AppColors.primary)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          ValueListenableBuilder<List<Bid>>(
+                            valueListenable: widget.order.bids,
+                            builder: (_, bids, __) {
+                              double currentHigh = bids.isNotEmpty ? bids.first.amount : widget.order.minBid;
+                              final suggestions = SmartBidSuggester.suggestBids(currentHigh, 10);
+                              
+                              return SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: suggestions.map((amt) => Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ActionChip(
+                                      label: Text('₹${amt.toInt()}'),
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                                      avatar: Icon(Icons.arrow_upward, size: 14, color: AppColors.primary),
+                                      backgroundColor: AppColors.primary.withOpacity(0.05),
+                                      side: BorderSide(color: AppColors.primary.withOpacity(0.2)),
+                                      labelStyle: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                      onPressed: () {
+                                         AuctionManager.addBid(widget.order, 'user', 'You', amt);
+                                      },
+                                    ),
+                                  )).toList(),
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      ValueListenableBuilder<List<Bid>>(
-                        valueListenable: widget.order.bids,
-                        builder: (_, bids, __) {
-                          double currentHigh = bids.isNotEmpty ? bids.first.amount : widget.order.minBid;
-                          final suggestions = SmartBidSuggester.suggestBids(currentHigh, 10);
-                          
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: suggestions.map((amt) => Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ActionChip(
-                                  label: Text('₹$amt'),
-                                  avatar: const Icon(Icons.arrow_upward, size: 16),
-                                  backgroundColor: Colors.purple.withOpacity(0.1),
-                                  labelStyle: const TextStyle(color: Colors.purple, fontWeight: FontWeight.bold),
-                                  onPressed: () {
-                                     AuctionManager.addBid(widget.order, 'user', 'You', amt);
-                                  },
-                                ),
-                              )).toList(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
 
-          // Countdown / Sold Overlay
+          // Countdown Overlay (Only for "Going Once...")
           ValueListenableBuilder<int?>(
             valueListenable: widget.order.countdown,
             builder: (_, count, __) {
-              if (count == null) return const SizedBox.shrink();
-              
-              final isSold = count == 0;
-              final Color bgColor = isSold ? AppColors.success.withOpacity(0.9) : Colors.black.withOpacity(0.7);
-              final String text = isSold ? 'SOLD!' : 'Going Once...\n$count';
+              if (count == null || count == 0) return const SizedBox.shrink(); // Don't show if Sold or Null
               
               return Container(
-                color: bgColor,
+                color: Colors.black.withOpacity(0.7),
                 child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        text,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      if (isSold) ...[
-                        const SizedBox(height: 16),
-                        ValueListenableBuilder<List<Bid>>(
-                          valueListenable: widget.order.bids,
-                          builder: (_, bids, __) {
-                             final winner = bids.isNotEmpty ? bids.first.userName : 'Unknown';
-                             final amount = bids.isNotEmpty ? bids.first.amount : 0;
-                             return Text(
-                               'Winner: $winner\n₹$amount',
-                               textAlign: TextAlign.center,
-                               style: const TextStyle(fontSize: 24, color: Colors.white),
-                             );
-                          },
-                        ),
-                        const SizedBox(height: 32),
-                        ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white, 
-                            foregroundColor: AppColors.success,
-                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                          ),
-                          child: const Text('Close Auction'),
-                        ),
-                      ],
-                    ],
+                  child: Text(
+                    'Going Once...\n$count',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
               );
