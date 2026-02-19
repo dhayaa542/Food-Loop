@@ -4,6 +4,8 @@ import 'dart:math';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import '../data/app_data.dart';
+import 'package:provider/provider.dart';
+import '../services/auth_provider.dart';
 
 // ═══════════════════════════════════════════════
 //  MODELS & AI LOGIC
@@ -35,15 +37,26 @@ class BulkOrder {
     required this.restaurant,
     required this.imageUrl,
     required this.minBid,
-    this.minUsers = 5,
-    this.durationSeconds = 90,
+    this.minUsers = 2, // Lowered for easier testing
+    this.durationSeconds = 600, // 10 mins for testing
   }) : 
-    userCount = ValueNotifier(1), // User + others
+    userCount = ValueNotifier(1), 
     isLocked = ValueNotifier(false),
     bids = ValueNotifier([]),
     timeRemaining = ValueNotifier(durationSeconds),
     lastBidTime = ValueNotifier(null),
     countdown = ValueNotifier(null);
+
+  factory BulkOrder.fromJson(Map<String, dynamic> json) {
+    return BulkOrder(
+      id: json['id'].toString(),
+      title: json['title'] ?? 'No Title',
+      description: json['description'] ?? 'No Description',
+      restaurant: json['Partner']?['businessName'] ?? 'Unknown Restaurant',
+      imageUrl: json['imageUrl'] ?? 'https://via.placeholder.com/150',
+      minBid: double.tryParse(json['price'].toString()) ?? 0.0,
+    );
+  }
 }
 
 class Bid {
@@ -52,6 +65,15 @@ class Bid {
   final double amount;
   final DateTime timestamp;
   Bid(this.userId, this.userName, this.amount, this.timestamp);
+
+  factory Bid.fromJson(Map<String, dynamic> json) {
+    return Bid(
+      json['userId'].toString(),
+      json['User']?['name'] ?? 'Unknown',
+      double.tryParse(json['amount'].toString()) ?? 0.0,
+      DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+    );
+  }
 }
 
 /// "AI Model" that suggests optimal bid amounts based on current velocity and spread.
@@ -86,113 +108,91 @@ class SmartBidSuggester {
 // ═══════════════════════════════════════════════
 
 class AuctionManager {
-  static final List<BulkOrder> _activeOrders = [];
   static final ValueNotifier<List<BulkOrder>> ordersNotifier = ValueNotifier([]);
 
-  // Mock Data Initialization
-  static void init() {
-    if (_activeOrders.isEmpty) {
-      createOrder('Corporate Lunch Pack', '50 servings of premium Biryani with sides.', 'Royal Spice', 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8', 2000);
-      createOrder('Vegan Party Platter', 'Assorted vegan appetizers for 20 people.', 'Green Eats', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd', 1500);
+  // Fetch offers from backend
+  static Future<void> fetchOffers(BuildContext context) async {
+    try {
+      final api = Provider.of<AuthProvider>(context, listen: false).api;
+      final offersJson = await api.getAllOffers();
+      
+      List<BulkOrder> loadedOrders = [];
+      for (var data in offersJson) {
+        final order = BulkOrder.fromJson(data);
+        // Fetch current bids for this order
+        try {
+          final bidsJson = await api.getBids(int.parse(order.id));
+          final List<Bid> fetchedBids = bidsJson.map((b) => Bid.fromJson(b)).toList();
+          order.bids.value = fetchedBids;
+          if (fetchedBids.isNotEmpty) {
+             order.userCount.value = fetchedBids.map((b) => b.userId).toSet().length + 1; // +1 for current user assuming they might join
+          }
+        } catch (e) {
+          print('Error fetching bids for ${order.id}: $e');
+        }
+        loadedOrders.add(order);
+      }
+      
+      ordersNotifier.value = loadedOrders;
+    } catch (e) {
+      print('Error fetching offers: $e');
     }
   }
 
-  static void createOrder(String title, String desc, String restaurant, String imageUrl, double minBid) {
-    final order = BulkOrder(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: title,
-      description: desc,
-      restaurant: restaurant,
-      imageUrl: imageUrl,
-      minBid: minBid,
-    );
-    _activeOrders.add(order);
-    ordersNotifier.value = List.from(_activeOrders);
+  // Refresh bids for a specific order (Polling)
+  static Future<void> refreshBids(BuildContext context, BulkOrder order) async {
+    try {
+      final api = Provider.of<AuthProvider>(context, listen: false).api;
+      final bidsJson = await api.getBids(int.parse(order.id));
+      final List<Bid> fetchedBids = bidsJson.map((b) => Bid.fromJson(b)).toList();
+      
+      // Update data
+      order.bids.value = fetchedBids;
+      if (fetchedBids.isNotEmpty) {
+          order.userCount.value = fetchedBids.map((b) => b.userId).toSet().length + 1;
+          order.lastBidTime.value = fetchedBids.first.timestamp;
+      }
+    } catch (e) {
+      print('Error refreshing bids: $e');
+    }
   }
 
-  // Simulates users joining the lobby
   static void joinLobby(BulkOrder order) {
-    if (order.isLocked.value) return;
-
-    // Simulate random users joining every few seconds
-    Timer.periodic(const Duration(milliseconds: 1500), (timer) {
-      if (order.userCount.value >= order.minUsers) {
-        timer.cancel();
-        _startAuction(order);
-      } else {
-        order.userCount.value++;
-      }
-    });
+    // Logic to join lobby if needed, e.g. notify server user is viewing
+    // For now, just a placeholder or local state update
+    print('Joined lobby for ${order.id}');
   }
 
-  // Start the live auction
-  static void _startAuction(BulkOrder order) {
-    order.isLocked.value = true;
-    
-    // Start Timer
-    Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (order.timeRemaining.value <= 0 || (order.countdown.value == 0)) { // Stop if sold
-        timer.cancel();
-        order.countdown.value = 0; // Ensure sold state
-        return;
-      }
-
-      order.timeRemaining.value--;
-      
-      final lastBid = order.lastBidTime.value ?? DateTime.now();
-      final inactivitySecs = DateTime.now().difference(lastBid).inSeconds;
-      
-      bool startCountdown = order.timeRemaining.value <= 3 || inactivitySecs > 10;
-      
-      if (startCountdown) {
-        if (order.countdown.value == null) {
-           order.countdown.value = 3;
-        } else if (order.countdown.value! > 0) {
-           order.countdown.value = order.countdown.value! - 1;
-        } else {
-           // Sold
-           timer.cancel();
-           // End logic handled by UI observing countdown == 0
-        }
-      } else {
-        if (order.countdown.value != null && order.timeRemaining.value > 3) {
-            order.countdown.value = null;
-        }
-      }
-    });
-
-    // Start Bot Bidding
-    Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (order.timeRemaining.value <= 0 || (order.countdown.value == 0)) { // Stop if sold
-        timer.cancel();
-        return;
-      }
-      
-      // Random chance for a bot to bid
-      if (Random().nextBool()) {
-        double currentHigh = order.bids.value.isNotEmpty ? order.bids.value.first.amount : order.minBid;
-        double increment = (Random().nextInt(5) + 1) * 10.0;
-        double newBid = currentHigh + increment;
-        
-        List<String> botNames = ['Alice', 'Bob', 'Charlie', 'Dave', 'Eve'];
-        String botName = botNames[Random().nextInt(botNames.length)];
-
-        addBid(order, 'bot', botName, newBid);
-      }
-    });
-  }
-
-  static void addBid(BulkOrder order, String userId, String userName, double amount) {
-    final newBid = Bid(userId, userName, amount, DateTime.now());
-    // Insert at top (highest bid)
-    order.bids.value = [newBid, ...order.bids.value]; 
-    order.lastBidTime.value = DateTime.now();
-
-    // Reset countdown (inactivity timer) ONLY if main timer is not running out (<3s)
-    if (order.timeRemaining.value > 3) {
-      order.countdown.value = null;
+  // Place a bid
+  static Future<bool> placeBid(BuildContext context, int offerId, double amount) async {
+    try {
+      final api = Provider.of<AuthProvider>(context, listen: false).api;
+      await api.placeBid(offerId, amount);
+      return true;
+    } catch (e) {
+      print('Error placing bid: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to bid: $e')));
+      return false;
     }
-    // If <3s, we do NOT reset countdown, and we do NOT extend time. Auction ends hard.
+  }
+  // Post a new bulk order (Auction)
+  static Future<bool> postBulkOrder(BuildContext context, String title, String description, double minBid) async {
+    try {
+      final api = Provider.of<AuthProvider>(context, listen: false).api;
+      await api.createOffer({
+        'title': title,
+        'description': description,
+        'price': minBid,
+        'imageUrl': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c', // Default or allow upload
+        // Backend handles partnerId from token
+        'status': 'Active', 
+      });
+      return true;
+    } catch (e) {
+      print('Error posting order: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to post: $e')));
+      return false;
+    }
   }
 }
 
@@ -230,15 +230,18 @@ class _BulkOrderUploadScreenState extends State<BulkOrderUploadScreen> {
               label: 'Post Auction',
               onPressed: () {
                 if (_titleCtrl.text.isNotEmpty && _priceCtrl.text.isNotEmpty) {
-                  AuctionManager.createOrder(
+                  AuctionManager.postBulkOrder(
+                    context,
                     _titleCtrl.text,
                     _descCtrl.text,
-                    'My Restaurant', 
-                    'https://images.unsplash.com/photo-1546069901-ba9599a7e63c', // Default image until upload logic added
                     double.tryParse(_priceCtrl.text) ?? 500,
-                  );
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bulk Order Posted!')));
+                  ).then((success) {
+                    if (success) {
+                       Navigator.pop(context);
+                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bulk Order Posted!')));
+                       AuctionManager.fetchOffers(context); // Refresh list
+                    }
+                  });
                 }
               },
             ),
@@ -264,7 +267,10 @@ class _BulkOrderListScreenState extends State<BulkOrderListScreen> {
   @override
   void initState() {
     super.initState();
-    AuctionManager.init(); // Ensure dummy data
+    // Fetch real data instead of init()
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AuctionManager.fetchOffers(context);
+    });
   }
 
   @override
@@ -415,60 +421,47 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
       return;
     }
 
-    AuctionManager.addBid(widget.order, 'user', 'You', amount);
-    _amountCtrl.clear();
-    FocusScope.of(context).unfocus(); // Dismiss keyboard
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Bid Placed!'), backgroundColor: Colors.green),
-    );
+    AuctionManager.placeBid(context, int.parse(widget.order.id), amount).then((success) {
+      if (success) {
+        _amountCtrl.clear();
+        FocusScope.of(context).unfocus();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bid Placed!'), backgroundColor: Colors.green),
+        );
+        AuctionManager.refreshBids(context, widget.order);
+      }
+    });
   }
 
   bool _reservationAdded = false;
 
+  Timer? _refreshTimer;
+
   @override
   void initState() {
     super.initState();
-    widget.order.countdown.addListener(_onCountdownChanged);
+    // Poll for new bids
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      AuctionManager.refreshBids(context, widget.order);
+    });
+    
+    // Listen for end
+    widget.order.timeRemaining.addListener(_onTimeChanged);
   }
 
   @override
   void dispose() {
-    widget.order.countdown.removeListener(_onCountdownChanged);
+    _refreshTimer?.cancel();
+    widget.order.timeRemaining.removeListener(_onTimeChanged);
     _amountCtrl.dispose();
     super.dispose();
   }
 
-  void _onCountdownChanged() {
-    if (widget.order.countdown.value == 0 && !_reservationAdded) {
-       final bids = widget.order.bids.value;
-       if (bids.isNotEmpty && bids.first.userId == 'user') {
-         _reservationAdded = true;
-         // Add to reservations
-         final wonOffer = Offer(
-           title: widget.order.title,
-           restaurant: widget.order.restaurant,
-           price: '₹${bids.first.amount.toInt()}',
-           distance: '2.5 km', // Simulation
-           pickupTime: 'Today, 8-9 PM',
-           status: BadgeStatus.active,
-           about: widget.order.description,
-           imageUrl: widget.order.imageUrl,
-         );
-         BuyerData.addReservation(wonOffer);
-         
-         // Notify user they won (optional, but good UX)
-         WidgetsBinding.instance.addPostFrameCallback((_) {
-           if (mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(
-                 content: Text('Congratulations! Order added to Reservations.'),
-                 backgroundColor: AppColors.primary,
-                 duration: Duration(seconds: 4),
-               ),
-             );
-           }
-         });
-       }
+  void _onTimeChanged() {
+    if (widget.order.timeRemaining.value <= 0 && !_reservationAdded) {
+       // Logic handled by UI observing timeRemaining <= 0
+       // We can trigger a rebuild or specific action if needed
+       // For now, the ValueListenableBuilder in build() handles the "Sold" view.
     }
   }
 
@@ -530,10 +523,10 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
               ),
 
               // Product Info Card (New)
-              ValueListenableBuilder<int?>(
-                valueListenable: widget.order.countdown,
-                builder: (_, count, __) {
-                  if (count == 0) return const SizedBox.shrink(); // Hide if Sold
+              ValueListenableBuilder<int>(
+                valueListenable: widget.order.timeRemaining,
+                builder: (_, time, __) {
+                  if (time <= 0) return const SizedBox.shrink(); // Hide if Sold
 
                   return Container(
                     padding: const EdgeInsets.all(12),
@@ -622,10 +615,10 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
               ),
 
               // Bidding Area (Input OR Winner)
-              ValueListenableBuilder<int?>(
-                valueListenable: widget.order.countdown,
-                builder: (_, count, __) {
-                  final isSold = count == 0;
+              ValueListenableBuilder<int>(
+                valueListenable: widget.order.timeRemaining,
+                builder: (_, time, __) {
+                  final isSold = time <= 0;
                   
                   if (isSold) {
                     return Container(
@@ -755,7 +748,11 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
                                       side: BorderSide(color: AppColors.primary.withOpacity(0.2)),
                                       labelStyle: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
                                       onPressed: () {
-                                         AuctionManager.addBid(widget.order, 'user', 'You', amt);
+                                         AuctionManager.placeBid(context, int.parse(widget.order.id), amt).then((success) {
+                                            if (success) {
+                                               AuctionManager.refreshBids(context, widget.order);
+                                            }
+                                         });
                                       },
                                     ),
                                   )).toList(),
@@ -772,23 +769,23 @@ class _LiveAuctionScreenState extends State<LiveAuctionScreen> {
             ],
           ),
 
-          // Countdown Overlay (Only for "Going Once...")
-          ValueListenableBuilder<int?>(
-            valueListenable: widget.order.countdown,
-            builder: (_, count, __) {
-              if (count == null || count == 0) return const SizedBox.shrink(); // Don't show if Sold or Null
-              
-              return Container(
+          // Countdown Overlay (Only for "Going Once...") - Removed in favor of simple time
+          // We can optionally add it back based on time <= 3
+          ValueListenableBuilder<int>(
+             valueListenable: widget.order.timeRemaining,
+             builder: (_, time, __) {
+                if (time > 3 || time <= 0) return const SizedBox.shrink();
+                return Container(
                 color: Colors.black.withOpacity(0.7),
                 child: Center(
                   child: Text(
-                    'Going Once...\n$count',
+                    'Ending in...\n$time',
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ),
               );
-            },
+             },
           ),
         ],
       ),

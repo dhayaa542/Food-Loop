@@ -1,0 +1,12 @@
+Resolving dependencies...
+Downloading packages...
+  google_fonts 6.3.3 (8.0.1 available)
+  lints 6.0.0 (6.1.0 available)
+  meta 1.17.0 (1.18.1 available)
+  source_span 1.10.1 (1.10.2 available)
+Got dependencies!
+4 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Building macOS application...                                   
+warning: Run script build phase 'Run Script' will be run during every build because it does not specify any outputs. To address this issue, either add output dependencies to the script phase, or configure it to run in every build by unchecking "Based on dependency analysis" in the script phase. (in target 'Flutter Assemble' from project 'Runner')
+✓ Built build/macos/Build/Products/Debug/login.app

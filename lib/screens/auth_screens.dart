@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
+import 'package:provider/provider.dart';
+import '../services/auth_provider.dart';
 import 'buyer_screens.dart';
 import 'partner_screens.dart';
 import 'admin_screens.dart';
@@ -102,27 +104,101 @@ class _LoginScreenState extends State<LoginScreen> {
     'admin@foodloop.com':   {'password': 'admin123',   'role': 'Admin'},
   };
 
-  void _login() {
+  Future<void> _login() async {
     final email = _emailCtrl.text.trim().toLowerCase();
     final pass  = _passCtrl.text.trim();
 
-    final account = _credentials[email];
-    if (account != null && account['password'] == pass) {
-      Widget destination;
-      switch (account['role']) {
-        case 'Partner': destination = const PartnerShell(); break;
-        case 'Admin':   destination = const AdminShell();   break;
-        default:        destination = const BuyerShell();
-      }
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Invalid email or password', style: AppTextStyles.bodySmall.copyWith(color: Colors.white)),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusMedium)),
-      ));
+    if (email.isEmpty || pass.isEmpty) {
+      _showError('Please fill in all fields');
+      return;
     }
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final success = await auth.login(email, pass);
+
+    if (success && mounted) {
+      final user = auth.user;
+      Widget destination;
+      if (user != null) {
+        switch (user['role']) {
+          case 'Partner': destination = const PartnerShell(); break;
+          case 'Admin':   destination = const AdminShell();   break;
+          default:        destination = const BuyerShell();
+        }
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
+      }
+    } else if (mounted) {
+      _showError('Invalid email or password');
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message, style: AppTextStyles.bodySmall.copyWith(color: Colors.white)),
+      backgroundColor: AppColors.error,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusMedium)),
+    ));
+  }
+
+  void _showForgotPasswordDialog() {
+    final emailController = TextEditingController();
+    final newPasswordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter your email and a new password.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: newPasswordController,
+              decoration: const InputDecoration(labelText: 'New Password', border: OutlineInputBorder()),
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final email = emailController.text.trim();
+              final newPass = newPasswordController.text.trim();
+              
+              if (email.isNotEmpty && newPass.isNotEmpty) {
+                 Navigator.pop(ctx);
+                 try {
+                   final auth = Provider.of<AuthProvider>(context, listen: false);
+                   // We need to add resetPassword to AuthProvider first!
+                   // For now, call API service directly or add it to AuthProvider.
+                   // Ideally, add to AuthProvider. Let's do a direct call for speed since AuthProvider just wraps it.
+                   await auth.api.resetPassword(email, newPass); 
+                   
+                   if (mounted) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                       const SnackBar(content: Text('Password reset successfully. Please login.'), backgroundColor: Colors.green)
+                     );
+                   }
+                 } catch (e) {
+                   if (mounted) {
+                     _showError('Failed to reset password: $e');
+                   }
+                 }
+              }
+            },
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -165,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {},
+                  onPressed: _showForgotPasswordDialog,
                   child: Text('Forgot Password?', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
                 ),
               ),
@@ -256,15 +332,56 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
   String _selectedRole = 'Buyer';
 
-  void _register() {
-    Widget destination;
-    switch (_selectedRole) {
-      case 'Partner': destination = const PartnerShell(); break;
-      default: destination = const BuyerShell();
+  Future<void> _register() async {
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim().toLowerCase();
+    final pass = _passCtrl.text.trim();
+
+    if (name.isEmpty || email.isEmpty || pass.isEmpty) {
+      _showError('Please fill in all fields');
+      return;
     }
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final success = await auth.register({
+      'name': name,
+      'email': email,
+      'password': pass,
+      'role': _selectedRole,
+    });
+
+    if (success && mounted) {
+      Widget destination;
+      switch (_selectedRole) {
+        case 'Partner': destination = const PartnerShell(); break;
+        default: destination = const BuyerShell();
+      }
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
+    } else if (mounted) {
+      _showError('Registration failed');
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message, style: AppTextStyles.bodySmall.copyWith(color: Colors.white)),
+      backgroundColor: AppColors.error,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusMedium)),
+    ));
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -297,11 +414,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Text('Join us and save good food 🌱', style: AppTextStyles.bodyMedium),
               const SizedBox(height: 32),
 
-              const AppInputField(label: 'Full Name', hint: 'Enter your full name', prefixIcon: Icons.person_outline),
+              AppInputField(label: 'Full Name', hint: 'Enter your full name', prefixIcon: Icons.person_outline, controller: _nameCtrl),
               const SizedBox(height: 20),
-              const AppInputField(label: 'Email', hint: 'Enter your email', prefixIcon: Icons.email_outlined, keyboardType: TextInputType.emailAddress),
+              AppInputField(label: 'Email', hint: 'Enter your email', prefixIcon: Icons.email_outlined, keyboardType: TextInputType.emailAddress, controller: _emailCtrl),
               const SizedBox(height: 20),
-              const AppInputField(label: 'Password', hint: 'Create a password', prefixIcon: Icons.lock_outline, obscureText: true),
+              AppInputField(label: 'Password', hint: 'Create a password', prefixIcon: Icons.lock_outline, obscureText: true, controller: _passCtrl),
               const SizedBox(height: 24),
 
               Text('I want to', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500, color: AppColors.textPrimary)),

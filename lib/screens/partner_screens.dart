@@ -3,6 +3,8 @@ import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'auth_screens.dart';
 import '../main.dart';
+import 'package:provider/provider.dart';
+import '../services/partner_provider.dart';
 import 'auction_screens.dart';
 
 // ═══════════════════════════════════════════════
@@ -24,6 +26,16 @@ class _PartnerShellState extends State<PartnerShell> {
     _OrdersScreen(),
     BulkOrderUploadScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PartnerProvider>().fetchProfile();
+      context.read<PartnerProvider>().fetchOffers();
+      context.read<PartnerProvider>().fetchOrders();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,26 +161,33 @@ class _PartnerDashboardState extends State<_PartnerDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(child: _buildHeader()),
-        SliverPadding(
-          padding: const EdgeInsets.all(AppDimens.paddingL),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              _buildMetricsGrid(),
-              const SizedBox(height: 24),
-              Text('Recent Activity', style: AppTextStyles.headlineSmall.copyWith(fontSize: 18)),
-              const SizedBox(height: 16),
-              _buildActivityList(),
-            ]),
-          ),
-        ),
-      ],
+    return Consumer<PartnerProvider>(
+      builder: (context, provider, child) {
+        return CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: _buildHeader(provider.profile)),
+            SliverPadding(
+              padding: const EdgeInsets.all(AppDimens.paddingL),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  _buildMetricsGrid(provider),
+                  const SizedBox(height: 24),
+                  Text('Recent Activity', style: AppTextStyles.headlineSmall.copyWith(fontSize: 18)),
+                  const SizedBox(height: 16),
+                  _buildActivityList(),
+                ]),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(Map<String, dynamic>? profile) {
+    final name = profile?['businessName'] ?? 'Fresh Bites';
+    final rating = profile?['rating'] ?? 0.0;
+    
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 20, bottom: 30, left: 20, right: 20),
       decoration: const BoxDecoration(
@@ -196,14 +215,14 @@ class _PartnerDashboardState extends State<_PartnerDashboard> {
               child: Row(children: [
                 Icon(Icons.star, color: Colors.amber[400], size: 16),
                 const SizedBox(width: 4),
-                Text('4.8 Rating', style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+                Text('$rating Rating', style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
               ]),
             ),
           ]),
           const SizedBox(height: 20),
           Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Hello, Fresh Bites', style: AppTextStyles.headlineMedium.copyWith(color: Colors.white)),
+              Text('Hello, $name', style: AppTextStyles.headlineMedium.copyWith(color: Colors.white)),
               const SizedBox(height: 4),
               Text('Ready to save food today?', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white70)),
             ])),
@@ -228,12 +247,12 @@ class _PartnerDashboardState extends State<_PartnerDashboard> {
     );
   }
 
-  Widget _buildMetricsGrid() {
+  Widget _buildMetricsGrid(PartnerProvider provider) {
     return Column(children: [
-      Row(children: const [
-        Expanded(child: MetricCard(icon: Icons.local_offer, label: 'Active Offers', value: '5', color: AppColors.primary)),
+      Row(children: [
+        Expanded(child: MetricCard(icon: Icons.local_offer, label: 'Active Offers', value: '${provider.offers.length}', color: AppColors.primary)),
         SizedBox(width: 16),
-        Expanded(child: MetricCard(icon: Icons.receipt_long, label: 'Orders Today', value: '12', color: AppColors.orange)),
+        Expanded(child: MetricCard(icon: Icons.receipt_long, label: 'Orders Today', value: '${provider.orders.where((o) => _isToday(o['createdAt'])).length}', color: AppColors.orange)),
       ]),
       const SizedBox(height: 16),
       Row(children: const [
@@ -272,6 +291,13 @@ class _PartnerDashboardState extends State<_PartnerDashboard> {
       ]),
     );
   }
+  bool _isToday(String? dateStr) {
+    if (dateStr == null) return false;
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return false;
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -304,31 +330,31 @@ class _ManageOffersScreenState extends State<_ManageOffersScreen> {
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('New Offer', style: TextStyle(color: Colors.white)),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppDimens.paddingL),
-        children: [
-          _offerCard(
-            title: 'Surprise Veggie Bag',
-            desc: 'Mix of seasonal vegetables',
-            price: '₹89', originalPrice: '₹200',
-            quantity: 5, pickupTime: '6:00 PM - 8:00 PM',
-            status: BadgeStatus.active,
-          ),
-          _offerCard(
-            title: 'Bakery Assortment',
-            desc: 'Croissants, breads & muffins',
-            price: '₹120', originalPrice: '₹350',
-            quantity: 2, pickupTime: '7:30 PM - 9:00 PM',
-            status: BadgeStatus.active,
-          ),
-          _offerCard(
-            title: 'Lunch Box Special',
-            desc: 'Rice, curry and salad',
-            price: '₹99', originalPrice: '₹180',
-            quantity: 0, pickupTime: '2:00 PM - 3:00 PM',
-            status: BadgeStatus.soldOut,
-          ),
-        ],
+      body: Consumer<PartnerProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) return const Center(child: CircularProgressIndicator());
+          
+          if (provider.offers.isEmpty) {
+             return Center(child: Text('No offers yet', style: AppTextStyles.bodyMedium));
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(AppDimens.paddingL),
+            itemCount: provider.offers.length,
+            itemBuilder: (ctx, i) {
+              final offer = provider.offers[i];
+              return _offerCard(
+                title: offer['title'],
+                desc: offer['description'] ?? '',
+                price: '₹${offer['price']}',
+                originalPrice: offer['originalPrice'] != null ? '₹${offer['originalPrice']}' : '',
+                quantity: offer['quantity'],
+                pickupTime: offer['pickupTime'] ?? '',
+                status: offer['status'] == 'Active' ? BadgeStatus.active : BadgeStatus.soldOut,
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -448,40 +474,45 @@ class _OrdersScreenState extends State<_OrdersScreen> with SingleTickerProviderS
       body: TabBarView(
         controller: _tabCtrl,
         children: [
-          _buildOrderList(BadgeStatus.pending),
-          _buildOrderList(BadgeStatus.active), // Using active for Ready
-          _buildOrderList(BadgeStatus.completed),
+          _buildOrderList('Pending'),
+          _buildOrderList('Ready'), // Mapped to Active/Ready
+          _buildOrderList('Completed'),
         ],
       ),
     );
   }
 
-  Widget _buildOrderList(BadgeStatus status) {
-    // Mock data based on status
-    final count = status == BadgeStatus.pending ? 3 : (status == BadgeStatus.active ? 2 : 5);
-    
-    if (count == 0) {
-      return Center(child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.inbox_outlined, size: 64, color: AppColors.textHint.withValues(alpha: 0.3)),
-          const SizedBox(height: 16),
-          Text('No orders here', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-        ],
-      ));
-    }
+  Widget _buildOrderList(String status) {
+    return Consumer<PartnerProvider>(
+      builder: (context, provider, child) {
+        // Filter orders
+        final orders = provider.orders.where((o) => o['status'] == status).toList();
+        
+        if (orders.isEmpty) {
+          return Center(child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.inbox_outlined, size: 64, color: AppColors.textHint.withValues(alpha: 0.3)),
+              const SizedBox(height: 16),
+              Text('No orders here', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
+            ],
+          ));
+        }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(AppDimens.paddingL),
-      itemCount: count,
-      itemBuilder: (_, i) => _orderCard(i, status),
+        return ListView.builder(
+          padding: const EdgeInsets.all(AppDimens.paddingL),
+          itemCount: orders.length,
+          itemBuilder: (_, i) => _orderCard(orders[i], status),
+        );
+      },
     );
   }
 
-  Widget _orderCard(int index, BadgeStatus status) {
-    final names = ['Alex Johnson', 'Priya Sharma', 'Rahul Kumar', 'Sarah Lee', 'Mike Chen'];
-    final items = ['Veggie Bowl', 'Pasta Delight', 'Sushi Pack', 'Bakery Box', 'Fruit Mix'];
-    final times = ['6:30 PM', '7:00 PM', '7:15 PM', '8:00 PM', '8:30 PM'];
+  Widget _orderCard(dynamic order, String status) {
+    final buyerName = order['Buyer']?['name'] ?? 'Guest';
+    final total = order['totalAmount'];
+    final date = DateTime.tryParse(order['createdAt']) ?? DateTime.now();
+    final timeStr = '${date.hour}:${date.minute.toString().padLeft(2, '0')}'; 
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -496,39 +527,42 @@ class _OrdersScreenState extends State<_OrdersScreen> with SingleTickerProviderS
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text('#10${24+index}', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary)),
+              child: Text('#10${order['id']}', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.bold, color: AppColors.primary)),
             ),
             const Spacer(),
-            Text(times[index % 5], style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+            Text(timeStr, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 12),
           Row(children: [
-            CircleAvatar(radius: 20, backgroundColor: Colors.grey[200], child: Text(names[index % 5][0], style: AppTextStyles.titleMedium)),
+            CircleAvatar(radius: 20, backgroundColor: Colors.grey[200], child: Text(buyerName[0], style: AppTextStyles.titleMedium)),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(names[index % 5], style: AppTextStyles.titleMedium.copyWith(fontSize: 15)),
-              Text('1x ${items[index % 5]}', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+              Text(buyerName, style: AppTextStyles.titleMedium.copyWith(fontSize: 15)),
+              Text('Total: ₹$total', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
             ])),
-            Text('₹${89 + index * 10}', style: AppTextStyles.titleMedium.copyWith(fontSize: 15)),
           ]),
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 12),
-          if (status == BadgeStatus.pending)
+          if (status == 'Pending')
             Row(children: [
               Expanded(child: OutlinedButton(onPressed: () {}, child: const Text('Reject'))),
               const SizedBox(width: 12),
               Expanded(child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                    context.read<PartnerProvider>().updateOrderStatus(order['id'], 'Ready');
+                },
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                 child: const Text('Accept'),
               )),
             ])
-          else if (status == BadgeStatus.active)
+          else if (status == 'Ready')
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: () {
+                    context.read<PartnerProvider>().updateOrderStatus(order['id'], 'Completed');
+                },
                 icon: const Icon(Icons.check, size: 18),
                 label: const Text('Mark Completed'),
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, foregroundColor: Colors.white),
@@ -551,8 +585,39 @@ class _OrdersScreenState extends State<_OrdersScreen> with SingleTickerProviderS
 // ═══════════════════════════════════════════════
 //  CREATE OFFER SHEET
 // ═══════════════════════════════════════════════
-class _CreateOfferSheet extends StatelessWidget {
+class _CreateOfferSheet extends StatefulWidget {
   const _CreateOfferSheet();
+
+  @override
+  State<_CreateOfferSheet> createState() => _CreateOfferSheetState();
+}
+
+class _CreateOfferSheetState extends State<_CreateOfferSheet> {
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _priceCtrl = TextEditingController();
+  final _origPriceCtrl = TextEditingController();
+  final _qtyCtrl = TextEditingController();
+  final _pickupCtrl = TextEditingController();
+
+  Future<void> _submit() async {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) return;
+
+    final success = await context.read<PartnerProvider>().createOffer({
+      'title': title,
+      'description': _descCtrl.text.trim(),
+      'price': double.tryParse(_priceCtrl.text) ?? 0,
+      'originalPrice': double.tryParse(_origPriceCtrl.text),
+      'quantity': int.tryParse(_qtyCtrl.text) ?? 1,
+      'pickupTime': _pickupCtrl.text.trim(),
+    });
+
+    if (success && mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offer Created Successfully!'), backgroundColor: AppColors.success));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -578,31 +643,29 @@ class _CreateOfferSheet extends StatelessWidget {
                 child: const Icon(Icons.add_a_photo, color: Colors.grey),
               ),
               const SizedBox(width: 16),
-              Expanded(child: Column(children: const [
-                AppInputField(label: 'Title', hint: 'e.g. Veggie Surprise'),
+              Expanded(child: Column(children: [
+                AppInputField(label: 'Title', hint: 'e.g. Veggie Surprise', controller: _titleCtrl),
               ])),
             ]),
             const SizedBox(height: 16),
-            const AppInputField(label: 'Description', hint: 'What\'s in the bag?'),
             const SizedBox(height: 16),
-            Row(children: const [
-              Expanded(child: AppInputField(label: 'Price', hint: '₹', keyboardType: TextInputType.number)),
+            AppInputField(label: 'Description', hint: 'What\'s in the bag?', controller: _descCtrl),
+            const SizedBox(height: 16),
+            Row(children: [
+              Expanded(child: AppInputField(label: 'Price', hint: '₹', keyboardType: TextInputType.number, controller: _priceCtrl)),
               SizedBox(width: 16),
-              Expanded(child: AppInputField(label: 'Original Price', hint: '₹', keyboardType: TextInputType.number)),
+              Expanded(child: AppInputField(label: 'Original Price', hint: '₹', keyboardType: TextInputType.number, controller: _origPriceCtrl)),
             ]),
             const SizedBox(height: 16),
-            Row(children: const [
-              Expanded(child: AppInputField(label: 'Quantity', hint: '5', keyboardType: TextInputType.number)),
+            Row(children: [
+              Expanded(child: AppInputField(label: 'Quantity', hint: '5', keyboardType: TextInputType.number, controller: _qtyCtrl)),
               SizedBox(width: 16),
-              Expanded(child: AppInputField(label: 'Pickup Time', hint: '6pm - 8pm')),
+              Expanded(child: AppInputField(label: 'Pickup Time', hint: '6pm - 8pm', controller: _pickupCtrl)),
             ]),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
-              child: PrimaryButton(label: 'Publish Offer', onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offer Created Successfully!'), backgroundColor: AppColors.success));
-              }),
+              child: PrimaryButton(label: 'Publish Offer', onPressed: _submit),
             ),
           ],
         ),
