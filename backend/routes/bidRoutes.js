@@ -13,4 +13,14 @@ router.post('/', auth, bidController.placeBid);
 // @access  Public (or Private?) - Let's make it Public for now so anyone can see bids
 router.get('/:offerId', bidController.getBids);
 
+// @route   POST api/bids/join/:offerId
+// @desc    Join a lobby for an offer
+// @access  Private
+router.post('/join/:offerId', auth, bidController.joinLobby);
+
+// @route   GET api/bids/lobby/:offerId
+// @desc    Get lobby status for an offer
+// @access  Public (or Private?) - Public for now
+router.get('/lobby/:offerId', bidController.getLobbyStatus);
+
 module.exports = router;

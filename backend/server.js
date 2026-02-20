@@ -18,9 +18,11 @@ app.use('/api/partners', require('./routes/partnerRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/offers', require('./routes/offerRoutes'));
 app.use('/api/bids', require('./routes/bidRoutes'));
+app.use('/api/users', require('./routes/userRoutes'));
 
 // Database Connection & Sync
-db.sequelize.sync({ alter: true }) // use { force: true } only for development to reset tables
+// Database Connection & Sync
+db.sequelize.sync({ alter: true }) // Switched back to alter: true to persist data
     .then(() => {
         console.log('Database connected and synced.');
         app.listen(PORT, () => {

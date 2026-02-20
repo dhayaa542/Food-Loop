@@ -9,6 +9,7 @@ const sequelize = new Sequelize(
     process.env.DB_PASS || 'password',
     {
         host: process.env.DB_HOST || 'localhost',
+        port: process.env.DB_PORT || 3306,
         dialect: 'mysql',
         logging: false,
     }
@@ -52,13 +53,22 @@ db.OrderItem.belongsTo(db.Offer, { foreignKey: 'offerId' });
 
 // Bid Model
 db.Bid = require('../models/Bid')(sequelize, Sequelize);
+db.AuctionParticipant = require('../models/AuctionParticipant')(sequelize, Sequelize);
 
-// Offer - Bid (One-to-Many)
-db.Offer.hasMany(db.Bid, { foreignKey: 'offerId', onDelete: 'CASCADE' });
+// Associations
+db.Partner.hasMany(db.Offer, { foreignKey: 'partnerId' });
+db.Offer.belongsTo(db.Partner, { foreignKey: 'partnerId' });
+
+db.Offer.hasMany(db.Bid, { foreignKey: 'offerId' });
 db.Bid.belongsTo(db.Offer, { foreignKey: 'offerId' });
 
-// User - Bid (One-to-Many)
-db.User.hasMany(db.Bid, { foreignKey: 'userId', onDelete: 'CASCADE' });
+db.User.hasMany(db.Bid, { foreignKey: 'userId' });
 db.Bid.belongsTo(db.User, { foreignKey: 'userId' });
+
+db.Offer.hasMany(db.AuctionParticipant, { foreignKey: 'offerId' });
+db.AuctionParticipant.belongsTo(db.Offer, { foreignKey: 'offerId' });
+
+db.User.hasMany(db.AuctionParticipant, { foreignKey: 'userId' });
+db.AuctionParticipant.belongsTo(db.User, { foreignKey: 'userId' });
 
 module.exports = db;

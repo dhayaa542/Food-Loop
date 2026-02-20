@@ -5,6 +5,7 @@ import 'auth_screens.dart';
 import '../main.dart';
 import 'package:provider/provider.dart';
 import '../services/partner_provider.dart';
+import '../services/auth_provider.dart';
 import 'auction_screens.dart';
 
 // ═══════════════════════════════════════════════
@@ -39,12 +40,14 @@ class _PartnerShellState extends State<PartnerShell> {
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = context.watch<PartnerProvider>().tabIndex;
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      drawer: _buildDrawer(context),
-      appBar: _currentIndex == 0 ? null : AppBar(
+      drawer: _buildDrawer(context, currentIndex),
+      appBar: currentIndex == 0 ? null : AppBar(
         title: Text(
-          _currentIndex == 1 ? 'My Offers' : 'Orders',
+          currentIndex == 1 ? 'My Offers' : (currentIndex == 2 ? 'Orders' : 'Bulk Orders'),
           style: AppTextStyles.headlineSmall,
         ),
         centerTitle: true,
@@ -58,11 +61,11 @@ class _PartnerShellState extends State<PartnerShell> {
           const SizedBox(width: 8),
         ],
       ),
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: IndexedStack(index: currentIndex, children: _screens),
     );
   }
 
-  Widget _buildDrawer(BuildContext context) {
+  Widget _buildDrawer(BuildContext context, int currentIndex) {
     return Drawer(
       backgroundColor: AppColors.surface,
       child: Column(
@@ -86,10 +89,10 @@ class _PartnerShellState extends State<PartnerShell> {
             ]),
           ),
           const SizedBox(height: 12),
-          _drawerItem(0, 'Dashboard', Icons.dashboard_outlined, Icons.dashboard),
-          _drawerItem(1, 'My Offers', Icons.local_offer_outlined, Icons.local_offer),
-          _drawerItem(2, 'Orders', Icons.receipt_long_outlined, Icons.receipt_long),
-          _drawerItem(3, 'Bulk Orders', Icons.inventory_2_outlined, Icons.inventory_2),
+          _drawerItem(context, 0, 'Dashboard', Icons.dashboard_outlined, Icons.dashboard, currentIndex),
+          _drawerItem(context, 1, 'My Offers', Icons.local_offer_outlined, Icons.local_offer, currentIndex),
+          _drawerItem(context, 2, 'Orders', Icons.receipt_long_outlined, Icons.receipt_long, currentIndex),
+          _drawerItem(context, 3, 'Bulk Orders', Icons.inventory_2_outlined, Icons.inventory_2, currentIndex),
           const Divider(height: 32, indent: 16, endIndent: 16),
           ListTile(
             leading: const Icon(Icons.person_outline, color: AppColors.textSecondary),
@@ -124,8 +127,8 @@ class _PartnerShellState extends State<PartnerShell> {
     );
   }
 
-  Widget _drawerItem(int index, String label, IconData icon, IconData activeIcon) {
-    final isSelected = _currentIndex == index;
+  Widget _drawerItem(BuildContext context, int index, String label, IconData icon, IconData activeIcon, int currentIndex) {
+    final isSelected = currentIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: ListTile(
@@ -138,7 +141,7 @@ class _PartnerShellState extends State<PartnerShell> {
         selected: isSelected,
         selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
         onTap: () {
-          setState(() => _currentIndex = index);
+          context.read<PartnerProvider>().setTabIndex(index);
           Navigator.pop(context);
         },
       ),
@@ -610,12 +613,16 @@ class _CreateOfferSheetState extends State<_CreateOfferSheet> {
       'price': double.tryParse(_priceCtrl.text) ?? 0,
       'originalPrice': double.tryParse(_origPriceCtrl.text),
       'quantity': int.tryParse(_qtyCtrl.text) ?? 1,
+
       'pickupTime': _pickupCtrl.text.trim(),
+      'imageUrl': 'https://loremflickr.com/320/240/food,dish?random=${DateTime.now().millisecondsSinceEpoch}',
     });
 
     if (success && mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offer Created Successfully!'), backgroundColor: AppColors.success));
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to create offer. Check connection/fields.'), backgroundColor: AppColors.error));
     }
   }
 
@@ -696,10 +703,11 @@ class _PartnerProfileScreenState extends State<_PartnerProfileScreen> {
   String _cuisine = 'Healthy, Vegetarian';
 
   void _editProfile() {
-    final nameCtrl = TextEditingController(text: _name);
-    final phoneCtrl = TextEditingController(text: _phone);
-    final addrCtrl = TextEditingController(text: _address);
-    final cuisineCtrl = TextEditingController(text: _cuisine);
+    final user = context.read<AuthProvider>().user;
+    final nameCtrl = TextEditingController(text: user?['businessName'] ?? user?['name'] ?? '');
+    final phoneCtrl = TextEditingController(text: user?['phone'] ?? '');
+    final addrCtrl = TextEditingController(text: user?['address'] ?? '');
+    final cuisineCtrl = TextEditingController(text: user?['cuisine'] ?? '');
 
     showDialog(
       context: context,
@@ -723,15 +731,31 @@ class _PartnerProfileScreenState extends State<_PartnerProfileScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _name = nameCtrl.text;
-                _phone = phoneCtrl.text;
-                _address = addrCtrl.text;
-                _cuisine = cuisineCtrl.text;
+            onPressed: () async {
+              final success = await context.read<AuthProvider>().updateProfile({
+                'businessName': nameCtrl.text.trim(), // API expects businessName for partner display usually, or mapping
+                // Wait, User model has 'name' and 'businessName'. 
+                // Partner profile screen currently shows '_name' which defaults to 'Fresh Bites'.
+                // If I update 'name' it changes user's name. If I update 'businessName' it changes business name.
+                // The prompt says "Restaurant Name", so I should probably update 'businessName'.
+                // And also maybe 'name' if we want to keep them in sync or just businessName.
+                // Let's update both for now or just businessName.
+                // Actually the API userController updates whatever is passed.
+                // Let's pass 'businessName' as the main display name for partners.
+                'businessName': nameCtrl.text.trim(),
+                'phone': phoneCtrl.text.trim(),
+                'address': addrCtrl.text.trim(),
+                'cuisine': cuisineCtrl.text.trim(),
               });
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile Updated'), backgroundColor: AppColors.success));
+
+              if (mounted) {
+                 Navigator.pop(ctx);
+                 if (success) {
+                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile Updated'), backgroundColor: AppColors.success));
+                 } else {
+                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update profile'), backgroundColor: AppColors.error));
+                 }
+              }
             },
             child: const Text('Save'),
           ),
@@ -776,7 +800,14 @@ class _PartnerProfileScreenState extends State<_PartnerProfileScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Text(_name, style: AppTextStyles.headlineSmall.copyWith(color: Colors.white)),
+                          // Use AuthProvider data
+                          Consumer<AuthProvider>(
+                            builder: (_, auth, __) {
+                              final user = auth.user;
+                              final name = user?['businessName'] ?? user?['name'] ?? 'Fresh Bites';
+                              return Text(name, style: AppTextStyles.headlineSmall.copyWith(color: Colors.white));
+                            }
+                          ),
                           Text('Partner since 2024', style: AppTextStyles.bodyMedium.copyWith(color: Colors.white70)),
                         ],
                       ),

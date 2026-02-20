@@ -14,6 +14,14 @@ class PartnerProvider with ChangeNotifier {
   List<dynamic> get orders => _orders;
   bool get isLoading => _isLoading;
 
+  int _tabIndex = 0;
+  int get tabIndex => _tabIndex;
+
+  void setTabIndex(int index) {
+    _tabIndex = index;
+    notifyListeners();
+  }
+
   Future<void> fetchProfile() async {
     _isLoading = true;
     notifyListeners();

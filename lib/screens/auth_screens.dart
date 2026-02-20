@@ -97,12 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
 
-  // Demo credentials
-  static const _credentials = {
-    'user@foodloop.com':    {'password': 'user123',    'role': 'Buyer'},
-    'partner@foodloop.com': {'password': 'partner123', 'role': 'Partner'},
-    'admin@foodloop.com':   {'password': 'admin123',   'role': 'Admin'},
-  };
+
 
   Future<void> _login() async {
     final email = _emailCtrl.text.trim().toLowerCase();
@@ -177,15 +172,16 @@ class _LoginScreenState extends State<LoginScreen> {
                  Navigator.pop(ctx);
                  try {
                    final auth = Provider.of<AuthProvider>(context, listen: false);
-                   // We need to add resetPassword to AuthProvider first!
-                   // For now, call API service directly or add it to AuthProvider.
-                   // Ideally, add to AuthProvider. Let's do a direct call for speed since AuthProvider just wraps it.
-                   await auth.api.resetPassword(email, newPass); 
+                   final success = await auth.resetPassword(email, newPass);
                    
                    if (mounted) {
-                     ScaffoldMessenger.of(context).showSnackBar(
-                       const SnackBar(content: Text('Password reset successfully. Please login.'), backgroundColor: Colors.green)
-                     );
+                     if (success) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                         const SnackBar(content: Text('Password reset successfully. Please login.'), backgroundColor: Colors.green)
+                       );
+                     } else {
+                       _showError('Failed to reset password. Check email.');
+                     }
                    }
                  } catch (e) {
                    if (mounted) {
@@ -260,34 +256,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-
-              // Demo credentials card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(AppDimens.radiusCard),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Icon(Icons.info_outline, size: 18, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Text('Demo Credentials', style: AppTextStyles.titleMedium.copyWith(fontSize: 14, color: AppColors.primary)),
-                    ]),
-                    const SizedBox(height: 12),
-                    _credRow(Icons.person, 'Buyer', 'user@foodloop.com', 'user123'),
-                    const SizedBox(height: 8),
-                    _credRow(Icons.storefront, 'Partner', 'partner@foodloop.com', 'partner123'),
-                    const SizedBox(height: 8),
-                    _credRow(Icons.admin_panel_settings, 'Admin', 'admin@foodloop.com', 'admin123'),
-                  ],
-                ),
-              ),
               const SizedBox(height: 32),
             ],
           ),
@@ -296,29 +264,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _credRow(IconData icon, String role, String email, String pass) {
-    return InkWell(
-      onTap: () {
-        _emailCtrl.text = email;
-        _passCtrl.text = pass;
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(children: [
-          Icon(icon, size: 18, color: AppColors.textSecondary),
-          const SizedBox(width: 8),
-          Text(role, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          const Spacer(),
-          Text('$email  /  $pass', style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textHint)),
-        ]),
-      ),
-    );
-  }
+
 }
 
 // ═══════════════════════════════════════════════

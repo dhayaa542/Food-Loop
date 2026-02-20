@@ -5,11 +5,16 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 
 class ApiService {
-  // Use 10.0.2.2 for Android Emulator, localhost for iOS/Web
+  // Singleton Pattern
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
+  // Use 10.0.2.2 for Android Emulator, localhost for Web, Local IP for iOS Device
   static String get baseUrl {
     if (kIsWeb) return 'http://localhost:5001/api';
     if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';
-    return 'http://localhost:5001/api';
+    // For physical iOS device, use your Mac's local IP
+    return 'http://192.168.0.6:5001/api';
   }
 
   final _storage = const FlutterSecureStorage();
@@ -59,6 +64,15 @@ class ApiService {
   Future<void> logout() async {
     _token = null;
     await _storage.delete(key: 'jwt_token');
+  }
+
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/users/profile'),
+      headers: await _getHeaders(),
+      body: jsonEncode(data),
+    );
+    return _handleResponse(response);
   }
 
   // Partners
@@ -147,6 +161,22 @@ class ApiService {
     );
     return _handleResponse(response);
   }
+
+  Future<Map<String, dynamic>> joinAuctionLobby(int offerId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/bids/join/$offerId'),
+      headers: await _getHeaders(),
+    );
+    return _handleResponse(response);
+  }
+
+  Future<Map<String, dynamic>> getLobbyParticipantCount(int offerId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/bids/lobby/$offerId'),
+      headers: await _getHeaders(),
+    );
+    return _handleResponse(response);
+  }
   
   // Password Reset
   Future<Map<String, dynamic>> resetPassword(String email, String newPassword) async {
@@ -174,6 +204,22 @@ class ApiService {
     } else {
       throw HttpException(response.body, response.statusCode);
     }
+  }
+  // Admin
+  Future<List<dynamic>> getAllUsers() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/users'),
+      headers: await _getHeaders(),
+    );
+    return _handleListResponse(response);
+  }
+
+  Future<List<dynamic>> getAllOrdersAdmin() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/orders/admin'),
+      headers: await _getHeaders(),
+    );
+    return _handleListResponse(response);
   }
 }
 

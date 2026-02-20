@@ -53,12 +53,32 @@ exports.getMyOrders = async (req, res) => {
     try {
         const orders = await Order.findAll({
             where: { buyerId: req.user.id },
-            include: [{ model: Partner, attributes: ['businessName'] }],
+            include: [{
+                model: Partner,
+                attributes: ['businessName', 'imageUrl'],
+                include: [{ model: db.User, attributes: ['email'] }]
+            }],
             order: [['createdAt', 'DESC']],
         });
         res.json(orders);
     } catch (err) {
         console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.getAllOrdersAdmin = async (req, res) => {
+    try {
+        const orders = await Order.findAll({
+            include: [
+                { model: db.User, as: 'Buyer', attributes: ['id', 'name', 'email'] },
+                { model: Partner, attributes: ['businessName'] }
+            ],
+            order: [['createdAt', 'DESC']],
+        });
+        res.json(orders);
+    } catch (err) {
+        console.error('Get all orders admin error:', err);
         res.status(500).send('Server Error');
     }
 };

@@ -7,6 +7,10 @@ import '../services/buyer_provider.dart';
 import '../services/auth_provider.dart';
 import 'auction_screens.dart';
 import '../data/app_data.dart';
+import 'dart:math';
+import '../services/location_service.dart';
+import 'payment_screen.dart';
+import 'package:geolocator/geolocator.dart';
 
 // ═══════════════════════════════════════════════
 //  DATA MODELS & STATE
@@ -53,15 +57,17 @@ class _BuyerShellState extends State<BuyerShell> {
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = context.watch<BuyerProvider>().tabIndex;
+    
     return Scaffold(
       appBar: AppBar(
-        title: Text(_drawerItems[_currentIndex].label, style: AppTextStyles.headlineSmall),
+        title: Text(_drawerItems[currentIndex].label, style: AppTextStyles.headlineSmall),
       ),
-      drawer: _buildDrawer(context, _drawerItems, _currentIndex, (i) {
-        setState(() => _currentIndex = i);
+      drawer: _buildDrawer(context, _drawerItems, currentIndex, (i) {
+        context.read<BuyerProvider>().setTabIndex(i);
         Navigator.pop(context);
       }, 'Buyer'),
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: IndexedStack(index: currentIndex, children: _screens),
     );
   }
 }
@@ -267,14 +273,8 @@ class _BuyerHomeScreen extends StatelessWidget {
     final title = data['title'];
     final restaurant = data['Partner']?['businessName'] ?? 'Unknown';
     final price = '₹${data['price']}';
-    final originalPrice = data['originalPrice'] != null ? '₹${data['originalPrice']}' : '';
     final pickupTime = data['pickupTime'] ?? '';
-    // OfferCard constructor needs update or use named args.
-    // Assuming OfferCard is defined in widgets which I can't easily change right now via this chunk. 
-    // Wait, OfferCard was used in previous chunk.
-    // I'll reconstruct using OfferCard widget but adapting arguments.
-    // Actually I should view widgets.dart to see OfferCard signature, but assuming based on usage:
-    // OfferCard(title, restaurant, price, originalPrice, distance, pickupTime, onTap)
+    final imageUrl = data['imageUrl'] ?? '';
     
     return OfferCard(
       title: title,
@@ -282,6 +282,7 @@ class _BuyerHomeScreen extends StatelessWidget {
       price: price,
       distance: '1.2 km', // Mock distance
       pickupTime: pickupTime,
+      imageUrl: imageUrl,
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _OfferDetailScreen(offerData: data))),
     );
   }
@@ -292,6 +293,7 @@ class _BuyerHomeScreen extends StatelessWidget {
       restaurant: data['Partner']?['businessName'] ?? 'Unknown',
       price: '₹${data['price']}',
       distance: '1.2 km',
+      imageUrl: data['imageUrl'] ?? '',
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _OfferDetailScreen(offerData: data))),
     );
   }
@@ -350,11 +352,9 @@ class _OfferDetailScreen extends StatelessWidget {
               background: Hero(
                 tag: title,
                 child: imageUrl != null && imageUrl.isNotEmpty
-                  ? Image.network(imageUrl, fit: BoxFit.cover)
-                  : Container(
-                      color: AppColors.primary.withOpacity(0.1),
-                      child: const Center(child: Icon(Icons.restaurant, size: 64, color: AppColors.primary)),
-                    ),
+                  ? Image.network(imageUrl, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Image.network('https://images.unsplash.com/photo-1546069901-ba9599a7e63c', fit: BoxFit.cover))
+                  : Image.network('https://images.unsplash.com/photo-1546069901-ba9599a7e63c', fit: BoxFit.cover),
               ),
             ),
           ),
@@ -428,44 +428,73 @@ class _OfferDetailScreen extends StatelessWidget {
                   height: 54,
                   child: ElevatedButton(
                     onPressed: () async {
-                       final success = await context.read<BuyerProvider>().createOrder({
-                         'partnerId': partnerId,
-                         'items': [
-                           {'offerId': offerId, 'quantity': 1, 'price': offerData['price']}
-                         ],
-                         'totalAmount': offerData['price']
-                       });
+                       final double priceVal = double.tryParse(offerData['price'].toString()) ?? 0.0;
+                       final int pId = int.tryParse(offerData['partnerId'].toString()) ?? 0;
+                       final int oId = int.tryParse(offerData['id'].toString()) ?? 0;
 
-                       if (success && context.mounted) {
-                         showModalBottomSheet(
-                          context: context,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => Container(
-                            margin: const EdgeInsets.all(16),
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const CircleAvatar(
-                                  radius: 32, backgroundColor: AppColors.success,
-                                  child: Icon(Icons.check, color: Colors.white, size: 32),
-                                ),
-                                const SizedBox(height: 16),
-                                Text('Reserved!', style: AppTextStyles.headlineMedium),
-                                const SizedBox(height: 8),
-                                Text('Head to $restaurant during the pickup window.', textAlign: TextAlign.center, style: AppTextStyles.bodyMedium),
-                                const SizedBox(height: 24),
-                                PrimaryButton(label: 'View Reservations', onPressed: () {
-                                  Navigator.pop(context); // Close sheet
-                                  Navigator.pop(context); // Close detail
-                                  // Ideally navigate to reservations tab
-                                }),
-                              ],
+                       if (priceVal <= 0 || pId == 0 || oId == 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid Offer Data'), backgroundColor: Colors.red));
+                          return;
+                       }
+
+                       // Navigate to Payment Screen
+                       Navigator.push(
+                         context,
+                         MaterialPageRoute(
+                           builder: (_) => PaymentScreen(
+                             amount: priceVal,
+                             onPaymentSuccess: () async {
+                               // Perform Order Creation AFTER Payment
+                               final error = await context.read<BuyerProvider>().createOrder({
+                                 'partnerId': pId,
+                                 'items': [
+                                   {'offerId': oId, 'quantity': 1, 'price': priceVal}
+                                 ],
+                                 'totalAmount': priceVal
+                               });
+
+                              if (error == null && context.mounted) {
+                                  Navigator.pop(context); // Close Payment Screen
+                                  // Navigator.pop(context); // Keep detail open or close? The original logic had pop then show sheet.
+                                  // Let's show the success sheet ON TOP of detail screen (after popping payment)
+                                  
+                                  showModalBottomSheet(
+                                    context: context,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (_) => Container(
+                                      margin: const EdgeInsets.all(16),
+                                      padding: const EdgeInsets.all(24),
+                                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const CircleAvatar(
+                                            radius: 32, backgroundColor: AppColors.success,
+                                            child: Icon(Icons.check, color: Colors.white, size: 32),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Text('Reserved!', style: AppTextStyles.headlineMedium.copyWith(fontWeight: FontWeight.bold)),
+                                          const SizedBox(height: 8),
+                                          Text('Pick up at $pickupTime', textAlign: TextAlign.center, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                                          const SizedBox(height: 24),
+                                          PrimaryButton(label: 'View Orders', onPressed: () {
+                                            Navigator.pop(context); // Close sheet
+                                            Navigator.pop(context); // Close detail
+                                            context.read<BuyerProvider>().setTabIndex(1); // Switch to Orders tab
+                                          }),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                } else if (context.mounted) {
+                                  Navigator.pop(context); // Close Payment Screen
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Order Failed: $error'), backgroundColor: AppColors.error));
+                                }
+                              },
                             ),
                           ),
                         );
-                       }
+                        // Removed invalid code accessing 'error' outside callback
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
@@ -510,74 +539,169 @@ class _OfferDetailScreen extends StatelessWidget {
 // ═══════════════════════════════════════════════
 //  NEARBY
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+//  NEARBY (AI POWERED)
+// ═══════════════════════════════════════════════
 class _NearbyScreen extends StatefulWidget {
   const _NearbyScreen();
   @override
   State<_NearbyScreen> createState() => _NearbyScreenState();
 }
 
-class _NearbyScreenState extends State<_NearbyScreen> {
+class _NearbyScreenState extends State<_NearbyScreen> with SingleTickerProviderStateMixin {
   String _selectedFilter = 'All';
+  bool _isScanning = true;
+  String _statusMessage = 'Initializing AI...';
+  List<Map<String, dynamic>> _nearbyOffers = [];
+  Position? _userLocation;
+
+  late AnimationController _scanCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _scanCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+    _initAI();
+  }
+
+  @override
+  void dispose() {
+    _scanCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initAI() async {
+    // 1. Get Location
+    setState(() => _statusMessage = 'Acquiring GPS Signal...');
+    _userLocation = await LocationService().getCurrentLocation();
+    
+    if (_userLocation == null) {
+      if (mounted) setState(() { _isScanning = false; _statusMessage = 'Location access denied.'; });
+      return;
+    }
+
+    // 2. Fetch Data (Simulated for Demo, ideally fetch from API with coordinates)
+    setState(() => _statusMessage = 'Scanning for food nearby...');
+    
+    // In a real app, we'd call an API. Here we'll grab offers from Provider and "enrich" them with fake coordinates near the user
+    final allOffers = context.read<BuyerProvider>().offers; // Assuming this is populated
+    if (allOffers.isEmpty) await context.read<BuyerProvider>().fetchOffers();
+    final freshOffers = context.read<BuyerProvider>().offers;
+
+    // 3. AI Processing
+    final List<Map<String, dynamic>> processed = [];
+    final random = Random();
+
+    for (var offer in freshOffers) {
+      // Simulate Partner Location (random offset from user)
+      // 0.01 deg is approx 1.1km
+      final latOffset = (random.nextDouble() - 0.5) * 0.05; 
+      final lngOffset = (random.nextDouble() - 0.5) * 0.05;
+      
+      final pLat = _userLocation!.latitude + latOffset;
+      final pLng = _userLocation!.longitude + lngOffset;
+
+      final distMeters = LocationService().calculateDistance(
+        _userLocation!.latitude, _userLocation!.longitude, 
+        pLat, pLng
+      );
+      
+      final partner = offer['Partner'] ?? {};
+      final rating = double.tryParse(partner['rating']?.toString() ?? '4.0') ?? 4.0;
+
+      // AI Score Formula: 
+      // Distance Weight: 60% (Lower is better)
+      // Rating Weight: 40% (Higher is better)
+      // Normalized Distance (0-5km) -> 1.0 - 0.0
+      double distScore = (5000 - distMeters).clamp(0, 5000) / 5000; 
+      double rateScore = rating / 5.0;
+      double aiScore = (distScore * 0.7) + (rateScore * 0.3);
+
+      processed.add({
+        ...offer,
+        'distanceMeters': distMeters,
+        'distanceStr': LocationService().formatDistance(distMeters),
+        'aiScore': aiScore,
+      });
+    }
+
+    // Sort by AI Score descending
+    processed.sort((a, b) => (b['aiScore'] as double).compareTo(a['aiScore'] as double));
+
+    if (mounted) {
+      setState(() {
+        _nearbyOffers = processed;
+        _isScanning = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isScanning) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              RotationTransition(
+                turns: _scanCtrl,
+                child: const Icon(Icons.radar, size: 64, color: AppColors.primary),
+              ),
+              const SizedBox(height: 24),
+              Text(_statusMessage, style: AppTextStyles.titleMedium),
+              const SizedBox(height: 8),
+              Text('Using AI to find best offers near you...', style: AppTextStyles.caption),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          Padding(
+          // Header with Location
+          Container(
             padding: const EdgeInsets.all(AppDimens.paddingL),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppDimens.radiusMedium), boxShadow: AppShadows.soft),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, color: AppColors.textHint, size: 22),
-                  const SizedBox(width: 10),
-                  Text('Search nearby offers...', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-                ],
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: AppDimens.paddingL),
-              children: ['All', 'Vegan', 'Indian', 'Italian', 'Bakery', 'Japanese'].map((label) {
-                final selected = label == _selectedFilter;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(label),
-                    selected: selected,
-                    showCheckmark: false,
-                    onSelected: (_) => setState(() => _selectedFilter = label),
-                    backgroundColor: selected ? AppColors.primary : Colors.white,
-                    labelStyle: AppTextStyles.bodySmall.copyWith(
-                      color: selected ? Colors.white : AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(color: selected ? AppColors.primary : AppColors.divider),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimens.paddingL),
+            color: AppColors.surface,
+            child: Row(
               children: [
-                OfferListTile(title: 'Veggie Bowl', restaurant: 'Green Leaf Cafe', price: '₹89', distance: '1.2 km',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _OfferDetailScreen(offerData: {'title': 'Veggie Bowl', 'Partner': {'businessName': 'Green Leaf Cafe'}, 'price': 89, 'quantity': 5, 'id': 991, 'partnerId': 991 })))),
-                OfferListTile(title: 'Pasta Pack', restaurant: 'Italiano Express', price: '₹99', distance: '2.1 km',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _OfferDetailScreen(offerData: {'title': 'Pasta Pack', 'Partner': {'businessName': 'Italiano Express'}, 'price': 99, 'quantity': 3, 'id': 992, 'partnerId': 992 })))),
+                const Icon(Icons.my_location, color: AppColors.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Your Location', style: AppTextStyles.caption),
+                    Text('Lat: ${_userLocation?.latitude.toStringAsFixed(4)}, Lng: ${_userLocation?.longitude.toStringAsFixed(4)}', style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.bold)),
+                  ]),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: AppColors.success.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                  child: const Text('AI Active', style: TextStyle(color: AppColors.success, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
               ],
+            ),
+          ),
+          
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(AppDimens.paddingL),
+              itemCount: _nearbyOffers.length,
+              itemBuilder: (_, i) {
+                final offer = _nearbyOffers[i];
+                final partner = offer['Partner'] ?? {};
+                return OfferListTile(
+                  title: offer['title'], 
+                  restaurant: partner['businessName'] ?? 'Unknown', 
+                  price: '₹${offer['price']}', 
+                  distance: offer['distanceStr'],
+                  imageUrl: offer['imageUrl'] ?? '',
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _OfferDetailScreen(offerData: offer))),
+                );
+              },
             ),
           ),
         ],
@@ -641,40 +765,81 @@ class _ReservationsScreen extends StatelessWidget {
         ),
       );
     }
-    return ListView(
+    return ListView.separated(
       padding: const EdgeInsets.all(AppDimens.paddingL),
-      children: items.map((r) {
-        // assuming first item details, or just total
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (_, i) {
+        final r = items[i];
+        final partner = r['Partner'] ?? {};
+        final partnerUser = partner['User'] ?? {};
+        final email = partnerUser['email'] ?? 'No email';
+        final orderItems = r['OrderItems'] as List? ?? [];
+        
+        // Get Image: Try first item's offer image, fallback to partner image
+        String imageUrl = partner['imageUrl'] ?? '';
+        if (orderItems.isNotEmpty && orderItems.first['Offer'] != null) {
+          imageUrl = orderItems.first['Offer']['imageUrl'] ?? imageUrl;
+        }
+
         final total = r['totalAmount'];
         final status = r['status'];
         final date = DateTime.tryParse(r['createdAt']) ?? DateTime.now();
-        final timeStr = '${date.hour}:${date.minute.toString().padLeft(2, '0')}'; 
+        final timeStr = '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(AppDimens.paddingM),
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppDimens.radiusCard), boxShadow: AppShadows.soft),
-          child: Row(
+          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16), boxShadow: AppShadows.soft),
+          child: Column(
             children: [
-              Container(
-                width: 48, height: 48,
-                decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppDimens.radiusMedium)),
-                child: const Icon(Icons.restaurant, color: AppColors.primary),
+              // Image Header
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: Stack(
+                    children: [
+                      imageUrl.isNotEmpty
+                          ? Image.network(imageUrl, fit: BoxFit.cover, width: double.infinity,
+                              errorBuilder: (_, __, ___) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image)))
+                          : Container(color: Colors.grey[200], child: const Icon(Icons.restaurant, size: 40)),
+                      Positioned(
+                        top: 12, right: 12,
+                        child: StatusBadge(status: status == 'Pending' ? BadgeStatus.pending : (status == 'Ready' ? BadgeStatus.active : BadgeStatus.completed)),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Order #10${r['id']}', style: AppTextStyles.titleMedium.copyWith(fontSize: 14)),
-                  Text('Placed at $timeStr', style: AppTextStyles.caption),
-                  const SizedBox(height: 4),
-                  Text('₹$total', style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                ]),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: Text(partner['businessName'] ?? 'Unknown Restaurant', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.bold))),
+                        Text('₹$total', style: AppTextStyles.headlineSmall.copyWith(color: AppColors.primary, fontSize: 18)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Placed at $timeStr • Order #10${r['id']}', style: AppTextStyles.caption),
+                    const Divider(height: 24),
+                    Row(
+                      children: [
+                        const Icon(Icons.email_outlined, size: 16, color: AppColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(email, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary))),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              StatusBadge(status: status == 'Pending' ? BadgeStatus.pending : (status == 'Ready' ? BadgeStatus.active : BadgeStatus.completed)),
             ],
           ),
         );
-      }).toList(),
+      },
     );
   }
 }
@@ -714,10 +879,21 @@ class _BuyerProfileScreenState extends State<_BuyerProfileScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
-              // Implement update profile API call here later
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile Update Not Implemented Yet'), backgroundColor: AppColors.primary));
+            onPressed: () async {
+              final success = await context.read<AuthProvider>().updateProfile({
+                'name': nameCtrl.text.trim(),
+                'phone': phoneCtrl.text.trim(),
+                'address': addrCtrl.text.trim(),
+              });
+              
+              if (mounted) {
+                Navigator.pop(ctx);
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile Updated Successfully'), backgroundColor: AppColors.success));
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update profile'), backgroundColor: AppColors.error));
+                }
+              }
             },
             child: const Text('Save'),
           ),

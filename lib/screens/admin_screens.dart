@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'auth_screens.dart';
+import '../services/api_service.dart';
 
 // ═══════════════════════════════════════════════
 //  ADMIN SHELL  (Drawer Navigation + Dropdown)
@@ -106,9 +107,53 @@ class _AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<_AdminDashboard> {
   int _hoveredBar = -1;
+  
+  // Real Data State
+  bool _isLoading = true;
+  int _totalUsers = 0;
+  int _totalPartners = 0;
+  int _totalOffers = 0;
+  int _totalReservations = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final api = ApiService();
+      // Parallel Fetch
+      final results = await Future.wait([
+        api.getAllUsers(),
+        api.getAllOffers(), // Public offers
+        api.getAllOrdersAdmin(),
+      ]);
+
+      final users = results[0] as List;
+      final offers = results[1] as List;
+      final orders = results[2] as List;
+
+      if (mounted) {
+        setState(() {
+          _totalUsers = users.where((u) => u['role'] == 'Buyer').length;
+          _totalPartners = users.where((u) => u['role'] == 'Partner').length;
+          _totalOffers = offers.where((o) => o['status'] == 'Active').length;
+          _totalReservations = orders.length;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Dashboard Load Error: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListView(
@@ -145,7 +190,7 @@ class _AdminDashboardState extends State<_AdminDashboard> {
                         child: Row(mainAxisSize: MainAxisSize.min, children: [
                           const Icon(Icons.eco, color: Colors.white, size: 14),
                           const SizedBox(width: 6),
-                          Text('100 meals saved today!', style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+                          Text('$_totalReservations meals saved!', style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
                         ]),
                       ),
                     ],
@@ -164,18 +209,18 @@ class _AdminDashboardState extends State<_AdminDashboard> {
 
           // ── Gradient metric cards (green palette) ──
           Row(children: [
-            Expanded(child: _gradientMetric('1,247', 'Total Users', Icons.people,
+            Expanded(child: _gradientMetric('$_totalUsers', 'Total Users', Icons.people,
                 const [Color(0xFF1B5E20), Color(0xFF388E3C)], '+12%')),
             const SizedBox(width: 12),
-            Expanded(child: _gradientMetric('86', 'Partners', Icons.storefront,
+            Expanded(child: _gradientMetric('$_totalPartners', 'Partners', Icons.storefront,
                 const [Color(0xFF2E7D32), Color(0xFF4CAF50)], '+5')),
           ]),
           const SizedBox(height: 12),
           Row(children: [
-            Expanded(child: _gradientMetric('42', 'Active Offers', Icons.local_offer,
-                const [Color(0xFF43A047), Color(0xFF66BB6A)], '8 new')),
+            Expanded(child: _gradientMetric('$_totalOffers', 'Active Offers', Icons.local_offer,
+                const [Color(0xFF43A047), Color(0xFF66BB6A)], 'Live')),
             const SizedBox(width: 12),
-            Expanded(child: _gradientMetric('3,891', 'Reservations', Icons.receipt_long,
+            Expanded(child: _gradientMetric('$_totalReservations', 'Reservations', Icons.receipt_long,
                 const [Color(0xFF558B2F), Color(0xFF8BC34A)], '+18%')),
           ]),
           const SizedBox(height: 24),
@@ -231,13 +276,13 @@ class _AdminDashboardState extends State<_AdminDashboard> {
                   Text('Sustainability Impact', style: AppTextStyles.titleMedium),
                 ]),
                 const SizedBox(height: 18),
-                _impactRow('Meals Saved', '2,847', 0.85, const Color(0xFF2E7D32), '/ 3,500 target'),
+                _impactRow('Meals Saved', '$_totalReservations', (_totalReservations / 100).clamp(0.0, 1.0), const Color(0xFF2E7D32), '/ 100 target'),
                 const SizedBox(height: 14),
-                _impactRow('CO₂ Reduced', '1.2 T', 0.60, const Color(0xFF388E3C), '/ 2.0 T target'),
+                _impactRow('CO₂ Reduced', '${(_totalReservations * 0.5).toStringAsFixed(1)} kg', (_totalReservations * 0.5 / 100).clamp(0.0, 1.0), const Color(0xFF388E3C), '/ 100 kg target'),
                 const SizedBox(height: 14),
-                _impactRow('Food Waste Prevented', '680 kg', 0.72, const Color(0xFF43A047), '/ 950 kg target'),
+                _impactRow('Food Waste Prevented', '${(_totalReservations * 0.3).toStringAsFixed(1)} kg', 0.72, const Color(0xFF43A047), 'Est.'),
                 const SizedBox(height: 14),
-                _impactRow('Active Cities', '4', 0.40, const Color(0xFF66BB6A), '/ 10 target'),
+                _impactRow('Active Cities', '1', 0.10, const Color(0xFF66BB6A), '/ 10 target'),
               ],
             ),
           ),
@@ -506,17 +551,39 @@ class _UserManagementScreen extends StatefulWidget {
 class _UserManagementScreenState extends State<_UserManagementScreen> {
   final _searchCtrl = TextEditingController();
   String _filterMode = 'All';
+  List<_UserData> _users = [];
+  bool _isLoading = true;
 
-  final List<_UserData> _users = [
-    _UserData(name: 'Alex Johnson', email: 'alex.j@email.com', role: 'Buyer', joined: 'Jan 2026', orders: 12),
-    _UserData(name: 'Priya Sharma', email: 'priya.s@email.com', role: 'Buyer', joined: 'Feb 2026', orders: 5),
-    _UserData(name: 'Rahul Kumar', email: 'rahul.k@email.com', role: 'Buyer', joined: 'Dec 2025', orders: 0, isSuspended: true),
-    _UserData(name: 'Sneha Menon', email: 'sneha.m@email.com', role: 'Buyer', joined: 'Jan 2026', orders: 8),
-    _UserData(name: 'Arun Das', email: 'arun.d@email.com', role: 'Buyer', joined: 'Nov 2025', orders: 21),
-    _UserData(name: 'Meera Roy', email: 'meera.r@email.com', role: 'Buyer', joined: 'Feb 2026', orders: 3),
-    _UserData(name: 'Vikram Patil', email: 'vikram.p@email.com', role: 'Buyer', joined: 'Jan 2026', orders: 15),
-    _UserData(name: 'Divya Nair', email: 'divya.n@email.com', role: 'Buyer', joined: 'Dec 2025', orders: 9, isSuspended: true),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchUsers();
+  }
+
+  Future<void> _fetchUsers() async {
+    try {
+      final data = await ApiService().getAllUsers();
+      setState(() {
+        _users = data.map< _UserData>((u) => _UserData(
+          name: u['name'] ?? 'Unknown',
+          email: u['email'] ?? 'No Email',
+          role: u['role'] ?? 'User',
+          joined: (u['createdAt'] != null) 
+              ? DateTime.parse(u['createdAt']).toLocal().toString().split(' ')[0] 
+              : 'Unknown',
+          orders: 0, // Backend doesn't send order count yet, default to 0
+          isSuspended: false, // Backend doesn't support suspension yet
+        )).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching users: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // Remove hardcoded list
+
 
   List<_UserData> get _filteredUsers {
     final query = _searchCtrl.text.trim().toLowerCase();

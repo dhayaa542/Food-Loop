@@ -57,4 +57,29 @@ class AuthProvider with ChangeNotifier {
     _user = null;
     notifyListeners();
   }
+
+  Future<bool> updateProfile(Map<String, dynamic> data) async {
+    try {
+      final res = await _apiService.updateProfile(data);
+      if (res.containsKey('user')) {
+        _user = res['user'];
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Update profile error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> resetPassword(String email, String newPassword) async {
+    try {
+      await _apiService.resetPassword(email, newPassword);
+      return true;
+    } catch (e) {
+      print('Reset password error: $e');
+      return false;
+    }
+  }
 }

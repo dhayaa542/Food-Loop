@@ -12,6 +12,14 @@ class BuyerProvider with ChangeNotifier {
   List<dynamic> get myOrders => _myOrders;
   bool get isLoading => _isLoading;
 
+  int _tabIndex = 0;
+  int get tabIndex => _tabIndex;
+  
+  void setTabIndex(int index) {
+    _tabIndex = index;
+    notifyListeners();
+  }
+
   Future<void> fetchOffers() async {
     _isLoading = true;
     notifyListeners();
@@ -36,14 +44,15 @@ class BuyerProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> createOrder(Map<String, dynamic> data) async {
+  Future<String?> createOrder(Map<String, dynamic> data) async {
     try {
       await _api.createOrder(data);
       await fetchOffers(); // Refresh offers to update quantity
-      return true;
+      await fetchMyOrders(); // Refresh orders list
+      return null; // Success
     } catch (e) {
       print('Create order error: $e');
-      return false;
+      return e.toString().replaceAll('HttpException: ', '');
     }
   }
 }

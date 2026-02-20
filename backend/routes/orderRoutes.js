@@ -13,4 +13,9 @@ router.post('/', auth, orderController.createOrder);
 // @access  Private (Buyer)
 router.get('/', auth, orderController.getMyOrders);
 
+// @route   GET api/orders/admin
+// @desc    Get all orders (Admin)
+// @access  Private (Admin)
+router.get('/admin', auth, orderController.getAllOrdersAdmin);
+
 module.exports = router;

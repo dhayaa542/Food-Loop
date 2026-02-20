@@ -2,6 +2,7 @@ const db = require('../config/db');
 const Bid = db.Bid;
 const Offer = db.Offer;
 const User = db.User;
+const AuctionParticipant = db.AuctionParticipant;
 
 // Place a new bid
 exports.placeBid = async (req, res) => {
@@ -56,6 +57,50 @@ exports.getBids = async (req, res) => {
         });
 
         res.json(bids);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.joinLobby = async (req, res) => {
+    try {
+        const { offerId } = req.params;
+        const userId = req.user.id;
+
+        // Check if already joined
+        const existing = await AuctionParticipant.findOne({
+            where: { offerId, userId }
+        });
+
+        if (!existing) {
+            await AuctionParticipant.create({
+                offerId,
+                userId
+            });
+        }
+
+        // Return current count
+        const count = await AuctionParticipant.count({
+            where: { offerId }
+        });
+
+        res.json({ count });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.getLobbyStatus = async (req, res) => {
+    try {
+        const { offerId } = req.params;
+
+        const count = await AuctionParticipant.count({
+            where: { offerId }
+        });
+
+        res.json({ count });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

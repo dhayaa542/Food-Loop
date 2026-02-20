@@ -46,8 +46,8 @@ class OfferCard extends StatelessWidget {
                       tag: title,
                       child: imageUrl.isNotEmpty
                           ? Image.network(imageUrl, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.restaurant, color: AppColors.primary, size: 36)))
-                          : const Center(child: Icon(Icons.restaurant, color: AppColors.primary, size: 36)),
+                              errorBuilder: (_, __, ___) => Image.network('https://images.unsplash.com/photo-1546069901-ba9599a7e63c', fit: BoxFit.cover))
+                          : Image.network('https://images.unsplash.com/photo-1546069901-ba9599a7e63c', fit: BoxFit.cover),
                     ),
                   ),
                   Positioned(
@@ -137,8 +137,8 @@ class OfferListTile extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.08),
                 child: imageUrl.isNotEmpty
                     ? Image.network(imageUrl, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.restaurant, color: AppColors.primary))
-                    : const Icon(Icons.restaurant, color: AppColors.primary),
+                        errorBuilder: (_, __, ___) => Image.network('https://images.unsplash.com/photo-1546069901-ba9599a7e63c', fit: BoxFit.cover))
+                    : Image.network('https://images.unsplash.com/photo-1546069901-ba9599a7e63c', fit: BoxFit.cover),
               ),
             ),
             const SizedBox(width: 12),

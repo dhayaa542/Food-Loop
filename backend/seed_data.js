@@ -15,6 +15,12 @@ const seedData = async () => {
             { name: 'Vihaan Gupta', email: 'vihaan@example.com', password: hashedPassword, role: 'Buyer', phone: '+91 9876543212', address: '78, Anna Salai, Chennai' },
             { name: 'Ananya Singh', email: 'ananya@example.com', password: hashedPassword, role: 'Buyer', phone: '+91 9876543213', address: '101, Connaught Place, Delhi' },
             { name: 'Rohan Kumar', email: 'rohan@example.com', password: hashedPassword, role: 'Buyer', phone: '+91 9876543214', address: '23, Linking Road, Mumbai' },
+            // Demo Users
+            { name: 'Demo Buyer', email: 'user@foodloop.com', password: 'user123', role: 'Buyer', phone: '+91 9000000001', address: 'Demo Address, City' },
+            { name: 'Demo Partner', email: 'partner@foodloop.com', password: 'partner123', role: 'Partner', phone: '+91 9000000002', address: 'Demo Partner Address, City' },
+            { name: 'Demo Admin', email: 'admin@foodloop.com', password: 'admin123', role: 'Admin', phone: '+91 9000000003', address: 'Admin HQ' },
+            // Restored User
+            { name: 'Rakshan', email: 'rakshan@gmail.com', password: 'Rakshan123', role: 'Buyer', phone: '1234567890', address: 'Sdfasfgfhg' },
         ];
 
         for (const buyer of buyers) {
@@ -134,8 +140,11 @@ const seedData = async () => {
                     businessName: bName,
                     cuisine: pCuisine,
                     rating: (3.5 + Math.random() * 1.5).toFixed(1), // Random rating 3.5 - 5.0
+                    cuisine: pCuisine,
+                    rating: (3.5 + Math.random() * 1.5).toFixed(1), // Random rating 3.5 - 5.0
                     isOnline: Math.random() > 0.1, // 90% chance online
-                    openingHours: '10:00 AM - 11:00 PM'
+                    openingHours: '10:00 AM - 11:00 PM',
+                    imageUrl: `https://loremflickr.com/320/240/restaurant,building?random=${i}`
                 });
                 partnerId = partner.id;
                 console.log(`Created Partner: ${bName}`);
@@ -154,8 +163,11 @@ const seedData = async () => {
                         businessName: bName,
                         cuisine: pCuisine,
                         rating: (3.5 + Math.random() * 1.5).toFixed(1),
+                        cuisine: pCuisine,
+                        rating: (3.5 + Math.random() * 1.5).toFixed(1),
                         isOnline: true,
-                        openingHours: '10:00 AM - 11:00 PM'
+                        openingHours: '10:00 AM - 11:00 PM',
+                        imageUrl: `https://loremflickr.com/320/240/restaurant,building?random=${i}`
                     });
                     partnerId = partner.id;
                 }
@@ -197,8 +209,9 @@ const seedData = async () => {
                     originalPrice: originalPrice,
                     quantity: Math.floor(Math.random() * 20) + 5, // 5 to 25 items
                     pickupTime: `${Math.floor(Math.random() * 12) + 10}:00 - ${Math.floor(Math.random() * 10) + 14}:00`,
+                    pickupTime: `${Math.floor(Math.random() * 12) + 10}:00 - ${Math.floor(Math.random() * 10) + 14}:00`,
                     status: Math.random() > 0.2 ? 'Active' : (Math.random() > 0.5 ? 'Sold Out' : 'Expired'),
-                    imageUrl: `https://source.unsplash.com/400x300/?${baseItem.name.replace(/\s/g, ',')},food` // Dynamic image search term
+                    imageUrl: `https://loremflickr.com/320/240/food,dish?random=${offerCount}` // Better random images
                 };
 
                 await db.Offer.create(offerData);
