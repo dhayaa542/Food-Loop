@@ -30,9 +30,10 @@ const seedData = async () => {
             });
             if (created) console.log(`Created Buyer: ${user.name}`);
             else {
-                user.password = hashedPassword;
+                // Restore the intended password for this specific user
+                user.password = buyer.password;
                 await user.save();
-                console.log(`Updated Buyer password: ${user.name}`);
+                console.log(`Restored password for: ${user.name}`);
             }
         }
 
@@ -150,8 +151,6 @@ const seedData = async () => {
                 console.log(`Created Partner: ${bName}`);
                 partnerCount++;
             } else {
-                user.password = hashedPassword;
-                await user.save();
                 // Find existing partner record
                 const existingPartner = await db.Partner.findOne({ where: { userId: user.id } });
                 if (existingPartner) {

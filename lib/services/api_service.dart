@@ -13,8 +13,8 @@ class ApiService {
   static String get baseUrl {
     if (kIsWeb) return 'http://localhost:5001/api';
     if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';
-    // For physical iOS device, use your Mac's local IP
-    return 'http://192.168.0.6:5001/api';
+    // For physical iOS device, use your Mac's local IP or a tunnel
+    return 'https://2983baf6763c31.lhr.life/api';
   }
 
   final _storage = const FlutterSecureStorage();
@@ -29,6 +29,7 @@ class ApiService {
   Future<Map<String, String>> _getHeaders() async {
     final headers = <String, String>{
       'Content-Type': 'application/json',
+      'Bypass-Tunnel-Reminder': 'true',
     };
     if (_token != null) {
       headers['x-auth-token'] = _token!;
@@ -122,7 +123,7 @@ class ApiService {
   Future<List<dynamic>> getAllOffers() async {
     final response = await http.get(
       Uri.parse('$baseUrl/offers'),
-      // No headers needed for public, or maybe just content-type
+      headers: {'Bypass-Tunnel-Reminder': 'true'},
     );
     return _handleListResponse(response);
   }
@@ -148,7 +149,7 @@ class ApiService {
   Future<List<dynamic>> getBids(int offerId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/bids/$offerId'),
-      // headers: await _getHeaders(), // Bids are public currently
+      headers: {'Bypass-Tunnel-Reminder': 'true'},
     );
     return _handleListResponse(response);
   }

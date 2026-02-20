@@ -3,15 +3,45 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+console.log('Sequelize Config:', {
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT
+});
+
 const sequelize = new Sequelize(
     process.env.DB_NAME || 'foodloop_db',
     process.env.DB_USER || 'root',
     process.env.DB_PASS || 'password',
     {
         host: process.env.DB_HOST || 'localhost',
-        port: process.env.DB_PORT || 3306,
+        port: parseInt(process.env.DB_PORT) || 3306,
         dialect: 'mysql',
         logging: false,
+        dialectOptions: {
+            connectTimeout: 60000
+        },
+        pool: {
+            max: 5,
+            min: 0,
+            acquire: 60000,
+            idle: 10000,
+            evict: 10000 // Removes idle connections quickly to prevent dead links on network switch
+        },
+        retry: {
+            match: [
+                /SequelizeConnectionError/,
+                /SequelizeConnectionRefusedError/,
+                /SequelizeHostNotFoundError/,
+                /SequelizeHostNotReachableError/,
+                /SequelizeInvalidConnectionError/,
+                /SequelizeConnectionTimedOutError/,
+                /TimeoutError/,
+                /EconomyError/
+            ],
+            max: 3 // Retry up to 3 times if connection drops
+        }
     }
 );
 

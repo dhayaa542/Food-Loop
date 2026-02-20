@@ -109,9 +109,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final success = await auth.login(email, pass);
+    final error = await auth.login(email, pass);
 
-    if (success && mounted) {
+    if (error == null && mounted) {
       final user = auth.user;
       Widget destination;
       if (user != null) {
@@ -123,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
       }
     } else if (mounted) {
-      _showError('Invalid email or password');
+      _showError(error ?? 'Unknown error occurred');
     }
   }
 

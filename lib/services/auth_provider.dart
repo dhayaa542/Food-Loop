@@ -25,16 +25,16 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> login(String email, String password) async {
+  Future<String?> login(String email, String password) async {
     try {
       final data = await _apiService.login(email, password);
       _user = data['user'];
       _isAuthenticated = true;
       notifyListeners();
-      return true;
+      return null;
     } catch (e) {
       print('Login error: $e');
-      return false;
+      return e.toString();
     }
   }
 
